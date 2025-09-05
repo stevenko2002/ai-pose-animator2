@@ -163,39 +163,37 @@ Within this ${aspectRatio} canvas, apply the following instruction to the input 
   }
 };
 
-export const generatePromptSuggestion = async (
-  base64Image: string
+export const optimizePrompt = async (
+  originalPrompt: string
 ): Promise<string> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set.");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const imagePart = fileToGenerativePart(base64Image);
 
-  const textPart = {
-    text: "Concisely describe this image for another AI image generator. Focus on key subjects, their actions, the setting, and the overall artistic style. Make it sound like a creative prompt, starting with the main subject. Do not use markdown or formatting. Just output the plain text of the prompt.",
-  };
+  const systemInstruction = "You are an expert prompt engineer for AI image generation models. Your task is to rewrite a user's prompt to be more descriptive, vivid, and detailed, which will result in a higher quality and more accurate image. Focus on adding specifics about subjects, actions, environment, lighting, mood, and artistic style. Respond ONLY with the rewritten prompt as plain text, without any additional explanations, greetings, or markdown formatting.";
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: {
-        parts: [imagePart, textPart],
+      contents: `Rewrite this prompt: "${originalPrompt}"`,
+      config: {
+        systemInstruction: systemInstruction,
       },
     });
 
-    const suggestion = response.text;
-    if (!suggestion) {
-      throw new Error("The API did not return a text suggestion.");
+    const optimizedText = response.text;
+    if (!optimizedText || optimizedText.trim() === '') {
+      throw new Error("The API did not return an optimized prompt.");
     }
-    return suggestion.trim();
+    return optimizedText.trim();
 
   } catch (error) {
-    console.error("Error generating prompt suggestion:", error);
+    console.error("Error optimizing prompt:", error);
     if (error instanceof Error) {
-        throw new Error(`Failed to generate suggestion: ${error.message}`);
+        throw new Error(`Failed to optimize prompt: ${error.message}`);
     }
-    throw new Error("An unknown error occurred while generating the prompt suggestion.");
+    throw new Error("An unknown error occurred while optimizing the prompt.");
   }
 };

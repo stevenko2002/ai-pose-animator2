@@ -1,5 +1,3 @@
-
-
 import React, { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import DrawingCanvas from './components/DrawingCanvas';
@@ -7,7 +5,7 @@ import PromptEditor from './components/PromptEditor';
 import GeneratedResult from './components/GeneratedImage';
 import HistoryPanel from './components/HistoryPanel';
 import ImageModal from './components/ImageModal';
-import { generateImageFromPose, editImageWithPrompt, generatePromptSuggestion, generateImageFromPrompt } from './services/geminiService';
+import { generateImageFromPose, editImageWithPrompt, generateImageFromPrompt } from './services/geminiService';
 import type { GenerationResult } from './types';
 
 type AspectRatio = '1:1' | '16:9' | '4:3' | '9:16' | '3:4' | 'original';
@@ -38,26 +36,11 @@ const getAspectRatioFromDataUrl = (dataUrl: string): Promise<string> => {
   });
 };
 
-const initialPrompts = [
-  "A person doing a yoga pose in a serene forest.",
-  "An astronaut floating in space, waving.",
-  "A superhero landing dramatically on a rooftop.",
-  "A chef enthusiastically tossing a pizza.",
-  "A medieval knight holding a sword, in a defensive stance.",
-  "A ballet dancer performing a graceful leap.",
-  "Turn the photo into a classic oil painting.",
-  "Change the background to a futuristic cityscape at night.",
-  "Make the person wear stylish sunglasses and a leather jacket.",
-  "Add a friendly golden retriever sitting next to the person."
-];
-const getRandomInitialPrompt = () => initialPrompts[Math.floor(Math.random() * initialPrompts.length)];
-
 
 const App: React.FC = () => {
   const [uploadedImages, setUploadedImages] = useState<(string | null)[]>([null, null, null]);
   const [canvasImage, setCanvasImage] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState<string | null>(null);
-  const [promptSuggestion, setPromptSuggestion] = useState<string | null>(getRandomInitialPrompt);
+  const [prompt, setPrompt] = useState<string>('');
   const [promptTemplates, setPromptTemplates] = useState<string[]>([]);
   
   const [editMode, setEditMode] = useState<EditMode>(() => {
@@ -157,10 +140,6 @@ const App: React.FC = () => {
     setZoomedImage(url);
   }, []);
 
-  const handleRandomizeSuggestion = useCallback(() => {
-    setPromptSuggestion(getRandomInitialPrompt());
-  }, []);
-
   const handleSavePromptTemplate = useCallback((template: string) => {
     const trimmedTemplate = template.trim();
     if (trimmedTemplate && !promptTemplates.includes(trimmedTemplate)) {
@@ -175,13 +154,12 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     const validImages = uploadedImages.filter((img): img is string => img !== null);
-    const hasPrompt = !!prompt && prompt.trim().length > 0;
+    const hasPrompt = prompt.trim().length > 0;
 
     // Common setup
     setIsLoading(true);
     setError(null);
     setActiveResult({ image: null, text: null });
-    setPromptSuggestion(null);
 
     try {
       let result: GenerationResult;
@@ -194,7 +172,7 @@ const App: React.FC = () => {
       // Case 1: Prompt mode with NO images (Text-to-Image)
       if (editMode === 'prompt' && hasPrompt && validImages.length === 0) {
         setLoadingMessage('Creating image from prompt...');
-        result = await generateImageFromPrompt(prompt!, finalAspectRatio);
+        result = await generateImageFromPrompt(prompt, finalAspectRatio);
       } 
       // Case 2: Pose mode (requires images and pose)
       else if (editMode === 'pose' && canvasImage && validImages.length > 0) {
@@ -204,7 +182,7 @@ const App: React.FC = () => {
       // Case 3: Prompt mode WITH images (Image Editing)
       else if (editMode === 'prompt' && hasPrompt && validImages.length > 0) {
         setLoadingMessage('Editing image with prompt...');
-        result = await editImageWithPrompt(validImages, prompt!, finalAspectRatio);
+        result = await editImageWithPrompt(validImages, prompt, finalAspectRatio);
       }
       // Case 4: Invalid state (should be caught by disabled button, but as a fallback)
       else {
@@ -218,14 +196,7 @@ const App: React.FC = () => {
       // Common result handling
       setActiveResult(result);
       setGenerationHistory(prev => [result, ...prev].slice(0, 10));
-      if (result.image) {
-          generatePromptSuggestion(result.image)
-            .then(setPromptSuggestion)
-            .catch(err => {
-                console.error("Failed to generate prompt suggestion:", err);
-                setPromptSuggestion(getRandomInitialPrompt());
-            });
-      }
+
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
     } finally {
@@ -235,7 +206,7 @@ const App: React.FC = () => {
   };
   
   const hasImages = uploadedImages.some(img => img !== null);
-  const hasPrompt = prompt && prompt.trim().length > 0;
+  const hasPrompt = prompt.trim().length > 0;
   const hasPose = !!canvasImage;
 
   let isGenerateDisabled = isLoading;
@@ -302,8 +273,6 @@ const App: React.FC = () => {
                 <PromptEditor 
                     prompt={prompt} 
                     onPromptChange={handlePromptChange} 
-                    suggestion={promptSuggestion}
-                    onRandomize={handleRandomizeSuggestion}
                     templates={promptTemplates}
                     onSaveTemplate={handleSavePromptTemplate}
                     onDeleteTemplate={handleDeletePromptTemplate}

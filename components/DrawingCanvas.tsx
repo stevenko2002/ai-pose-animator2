@@ -1,5 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 
+const generateRandomString = () => Math.random().toString(36).substring(2, 10);
+
 interface DrawingCanvasProps {
   onCanvasUpdate: (dataUrl: string | null) => void;
   clearTrigger?: number;
@@ -50,7 +52,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate, clearTrig
 
   const handleSave = () => {
     if (canvasRef.current) {
-        downloadImage(canvasRef.current.toDataURL('image/png'), 'pose_drawing.png');
+        downloadImage(canvasRef.current.toDataURL('image/png'), `pose_drawing_${generateRandomString()}.png`);
     }
   };
 

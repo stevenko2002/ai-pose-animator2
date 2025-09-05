@@ -1,6 +1,6 @@
-
-
 import React, { useState, useEffect } from 'react';
+
+const generateRandomString = () => Math.random().toString(36).substring(2, 10);
 
 interface GeneratedResultProps {
     imageSrc: string | null;
@@ -105,7 +105,7 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
                                 Zoom
                             </button>
                             <button
-                                onClick={() => downloadMedia(imageSrc, 'generated_image.png')}
+                                onClick={() => downloadMedia(imageSrc, `generated_image_${generateRandomString()}.png`)}
                                 className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
                             >
                                 Save Image

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 
+const generateRandomString = () => Math.random().toString(36).substring(2, 10);
+
 interface ImageUploaderProps {
   onImageUpload: (images: (string | null)[]) => void;
   images: (string | null)[];
@@ -130,7 +132,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
                   <button onClick={() => handleRemoveImage(index)} className="px-4 py-1.5 text-sm bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 transition-colors">
                       Remove
                   </button>
-                  <button onClick={() => downloadImage(imagePreview, `uploaded_image_${index + 1}.png`)} className="px-4 py-1.5 text-sm bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
+                  <button onClick={() => downloadImage(imagePreview, `uploaded_image_${index + 1}_${generateRandomString()}.png`)} className="px-4 py-1.5 text-sm bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors">
                       Save
                   </button>
               </>

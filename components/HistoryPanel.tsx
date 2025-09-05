@@ -1,7 +1,7 @@
-
-
 import React from 'react';
 import type { GenerationResult } from '../types';
+
+const generateRandomString = () => Math.random().toString(36).substring(2, 10);
 
 interface HistoryPanelProps {
   history: GenerationResult[];
@@ -75,7 +75,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
             onClick={(e) => {
               e.stopPropagation();
               if (item.image) {
-                downloadMedia(item.image, `history_image_${index + 1}.png`);
+                downloadMedia(item.image, `history_image_${index + 1}_${generateRandomString()}.png`);
               }
             }}
             className="w-full px-2 py-1 text-xs bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors"
