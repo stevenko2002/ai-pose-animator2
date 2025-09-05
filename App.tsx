@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import DrawingCanvas from './components/DrawingCanvas';
@@ -125,13 +126,14 @@ const App: React.FC = () => {
     setPrompt(text);
   }, []);
   
-  const handleUseAsInput = useCallback((image: string) => {
-    setUploadedImages([image, null, null]);
-    setCanvasImage(null);
-    setPromptSuggestion(getRandomInitialPrompt());
-    setActiveResult({ image: null, text: null });
-    setError(null);
-    setClearCanvasTrigger(c => c + 1);
+  const handleUseAsInput = useCallback((image: string, slotIndex: number) => {
+    setUploadedImages(prevImages => {
+      const newImages = [...prevImages];
+      if (slotIndex >= 0 && slotIndex < 3) {
+        newImages[slotIndex] = image;
+      }
+      return newImages;
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 

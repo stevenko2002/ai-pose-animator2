@@ -1,11 +1,12 @@
 
+
 import React from 'react';
 import type { GenerationResult } from '../types';
 
 interface HistoryPanelProps {
   history: GenerationResult[];
   onSelect: (result: GenerationResult) => void;
-  onUseAsInput: (image: string) => void;
+  onUseAsInput: (image: string, slotIndex: number) => void;
   onZoom: (url: string) => void;
   onDelete: (result: GenerationResult) => void;
   onClearAll: () => void;
@@ -41,16 +42,24 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
         />
 
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-2 space-y-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (item.image) onUseAsInput(item.image);
-            }}
-            className="w-full px-2 py-1 text-xs bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
-            title="Use as Input"
-          >
-            ✨ Use as Input
-          </button>
+          <div className="w-full">
+            <div className="text-center text-[10px] text-slate-300">Use as Input</div>
+            <div className="flex justify-center items-center gap-1 mt-0.5">
+                {[0, 1, 2].map(slotIndex => (
+                    <button
+                        key={slotIndex}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (item.image) onUseAsInput(item.image, slotIndex);
+                        }}
+                        className="w-7 h-6 text-xs bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition-colors flex items-center justify-center"
+                        title={`Use in Slot ${slotIndex + 1}`}
+                    >
+                        {slotIndex + 1}
+                    </button>
+                ))}
+            </div>
+          </div>
            <button
               onClick={(e) => {
                   e.stopPropagation();

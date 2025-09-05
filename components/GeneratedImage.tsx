@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 
 interface GeneratedResultProps {
@@ -6,7 +8,7 @@ interface GeneratedResultProps {
     isLoading: boolean;
     loadingMessage: string;
     error: string | null;
-    onUseAsInput: (image: string) => void;
+    onUseAsInput: (image: string, slotIndex: number) => void;
     onZoom: (image: string) => void;
     uploadedImageCount: number;
     aspectRatio: string;
@@ -26,6 +28,8 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
     onUseAsInput, onZoom, uploadedImageCount, aspectRatio
 }) => {
     
+    const [isUseAsInputOpen, setIsUseAsInputOpen] = useState(false);
+
     const downloadMedia = (url: string, filename: string) => {
         const link = document.createElement('a');
         link.href = url;
@@ -68,12 +72,30 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
 
                         {text && <p className="mt-4 text-slate-300 italic text-center">"{text}"</p>}
                         <div className="mt-6 flex flex-wrap justify-center gap-4">
-                            <button
-                                onClick={() => onUseAsInput(imageSrc)}
-                                className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                ✨ Use as Input
-                            </button>
+                            <div className="relative" onMouseLeave={() => setIsUseAsInputOpen(false)}>
+                                <button
+                                    onClick={() => setIsUseAsInputOpen(prev => !prev)}
+                                    className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    ✨ Use as Input
+                                </button>
+                                {isUseAsInputOpen && imageSrc && (
+                                    <div className="absolute bottom-full mb-2 w-full bg-slate-700 rounded-lg shadow-lg z-10 p-1">
+                                        {[0, 1, 2].map((slotIndex) => (
+                                            <button
+                                                key={slotIndex}
+                                                onClick={() => {
+                                                    onUseAsInput(imageSrc, slotIndex);
+                                                    setIsUseAsInputOpen(false);
+                                                }}
+                                                className="block w-full text-center px-4 py-2 text-sm text-white rounded-md hover:bg-blue-600 transition-colors"
+                                            >
+                                                To Slot {slotIndex + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                              <button
                                 onClick={() => onZoom(imageSrc)}
                                 className="px-6 py-2 bg-slate-500 text-white font-semibold rounded-lg hover:bg-slate-600 transition-colors flex items-center justify-center gap-2"
