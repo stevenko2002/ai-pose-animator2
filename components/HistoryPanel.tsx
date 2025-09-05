@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { GenerationResult } from '../types';
 
@@ -6,10 +7,12 @@ interface HistoryPanelProps {
   onSelect: (result: GenerationResult) => void;
   onUseAsInput: (image: string) => void;
   onZoom: (url: string) => void;
+  onDelete: (result: GenerationResult) => void;
+  onClearAll: () => void;
   activeImageSrc: string | null;
 }
 
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsInput, onZoom, activeImageSrc }) => {
+const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsInput, onZoom, onDelete, onClearAll, activeImageSrc }) => {
   if (history.length === 0) {
     return null;
   }
@@ -72,13 +75,33 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
             Save Image
           </button>
         </div>
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item);
+            }}
+            className="absolute top-1 right-1 w-5 h-5 bg-red-600/90 text-white rounded-full flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 hover:bg-red-700 transition-all transform hover:scale-110"
+            title="Delete from history"
+            aria-label={`Delete history item ${index + 1}`}
+        >
+          &times;
+        </button>
       </div>
     );
   };
 
   return (
     <div className="w-full max-w-5xl mt-8">
-      <h3 className="text-xl font-semibold text-white mb-4 text-center">History (Last 10)</h3>
+      <div className="flex justify-center items-center mb-4 relative">
+        <h3 className="text-xl font-semibold text-white text-center">History (Last 10)</h3>
+        <button
+            onClick={onClearAll}
+            className="absolute right-0 px-3 py-1 text-sm bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+            title="Clear all history"
+        >
+            Clear All
+        </button>
+      </div>
       <div className="flex space-x-4 p-4 bg-slate-800 rounded-lg shadow-lg overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900">
         {history.map((item, index) => (
           item.image && <HistoryItem key={index} item={item} index={index} />

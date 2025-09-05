@@ -139,6 +139,18 @@ const App: React.FC = () => {
     setActiveResult(result);
   };
   
+  const handleDeleteFromHistory = useCallback((resultToDelete: GenerationResult) => {
+    setGenerationHistory(prev => prev.filter(result => result.image !== resultToDelete.image));
+    if (activeResult.image === resultToDelete.image) {
+      setActiveResult({ image: null, text: null });
+    }
+  }, [activeResult.image]);
+
+  const handleClearHistory = useCallback(() => {
+    setGenerationHistory([]);
+    setActiveResult({ image: null, text: null });
+  }, []);
+
   const handleZoomImage = useCallback((url: string) => {
     setZoomedImage(url);
   }, []);
@@ -312,6 +324,8 @@ const App: React.FC = () => {
             onSelect={handleSelectFromHistory}
             onUseAsInput={handleUseAsInput}
             onZoom={handleZoomImage}
+            onDelete={handleDeleteFromHistory}
+            onClearAll={handleClearHistory}
             activeImageSrc={activeResult.image}
         />
 
