@@ -52,7 +52,11 @@ export const generateImageFromPose = async (
   const poseImagePart = fileToGenerativePart(poseImage);
 
   const textPart = {
-    text: `Analyze the subjects in the input images and the stick figure pose in the final image. Generate a new image where the subjects from the input images are performing the exact pose from the stick figure image. The background, clothing, and appearance of the subjects should be preserved as closely as possible, only the pose should change. The final generated image must have a ${aspectRatio} aspect ratio. If this requires changing the canvas size from the original image, intelligently expand the background and scene to fill the new space (outpainting). Do not crop, stretch, distort, or letterbox the original subject.`,
+    text: `Your primary task is to generate an image with a final canvas that has a strict ${aspectRatio} aspect ratio. A 16:9 ratio is a wide landscape, and 9:16 is a tall portrait. 
+    
+To achieve this ${aspectRatio} canvas, you MUST perform outpainting: intelligently expand the scene and background from the input images to fill the entire frame. Do not crop, stretch, distort, or add black bars (letterboxing). The content must naturally fill the entire canvas.
+
+Within this ${aspectRatio} canvas, the subjects from the input images must be performing the exact pose shown in the stick figure drawing. Preserve the subjects' appearance, clothing, and the original background style as much as possible. The main change should be the pose, adapted to fit the new ${aspectRatio} frame.`,
   };
 
   try {
@@ -91,7 +95,11 @@ export const editImageWithPrompt = async (
   const baseImageParts = baseImages.map(fileToGenerativePart);
 
   const textPart = {
-    text: `Based on the provided images and the following instruction, generate a new image. Instruction: "${prompt}". The final generated image must have a ${aspectRatio} aspect ratio. If the target aspect ratio is different from the input image, intelligently expand the background and scene to fill the new space (outpainting). Do not crop, stretch, distort, or letterbox the original content.`,
+    text: `Your primary task is to generate an image with a final canvas that has a strict ${aspectRatio} aspect ratio. A 16:9 ratio is a wide landscape, and 9:16 is a tall portrait. 
+    
+To achieve this ${aspectRatio} canvas, you MUST perform outpainting: intelligently expand the scene and background from the input images to fill the entire frame. Do not crop, stretch, distort, or add black bars (letterboxing). The content must naturally fill the entire canvas.
+
+Within this ${aspectRatio} canvas, apply the following instruction to the input images: "${prompt}".`,
   };
 
   try {
