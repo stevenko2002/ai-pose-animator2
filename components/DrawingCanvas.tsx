@@ -96,7 +96,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate, clearTrig
 
   return (
     <div className="flex flex-col items-center justify-center w-full h-full p-4 bg-slate-800 rounded-lg shadow-lg">
-      <h3 className="text-xl font-semibold text-white mb-4">2. Draw a Pose</h3>
+      <h3 className="text-xl font-semibold text-white mb-4">2. 繪製姿勢</h3>
       <canvas
         ref={canvasRef}
         width={350}
@@ -115,14 +115,14 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate, clearTrig
           onClick={clearCanvas}
           className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
         >
-          Clear Canvas
+          清除畫布
         </button>
         <button
           onClick={handleSave}
           disabled={!hasContent}
           className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Save Pose
+          儲存姿勢
         </button>
       </div>
     </div>

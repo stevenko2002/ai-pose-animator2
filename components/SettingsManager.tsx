@@ -1,11 +1,11 @@
 import React from 'react';
 
 interface SettingsManagerProps {
-  onExport: () => void;
-  onImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onExportProject: () => void;
+  onImportProject: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-const SettingsManager: React.FC<SettingsManagerProps> = ({ onExport, onImport }) => {
+const SettingsManager: React.FC<SettingsManagerProps> = ({ onExportProject, onImportProject }) => {
   const importInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
@@ -23,23 +23,23 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ onExport, onImport })
         ref={importInputRef}
         accept=".json,application/json"
         className="hidden"
-        onChange={onImport}
+        onChange={onImportProject}
         aria-hidden="true"
       />
       <button
         onClick={handleImportClick}
         className="px-4 py-2 text-sm bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
       >
-        Import Settings
+        匯入專案
       </button>
       <button
-        onClick={onExport}
+        onClick={onExportProject}
         className="px-4 py-2 text-sm bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-700 transition-colors"
       >
-        Export Settings
+        匯出專案
       </button>
     </div>
   );
 };
 
-export default SettingsManager;
+export default React.memo(SettingsManager);

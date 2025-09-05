@@ -43,7 +43,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
 
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-2 space-y-1">
           <div className="w-full">
-            <div className="text-center text-[10px] text-slate-300">Use as Input</div>
+            <div className="text-center text-[10px] text-slate-300">作為輸入</div>
             <div className="flex justify-center items-center gap-1 mt-0.5">
                 {[0, 1, 2].map(slotIndex => (
                     <button
@@ -53,7 +53,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
                           if (item.image) onUseAsInput(item.image, slotIndex);
                         }}
                         className="w-7 h-6 text-xs bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition-colors flex items-center justify-center"
-                        title={`Use in Slot ${slotIndex + 1}`}
+                        title={`用於欄位 ${slotIndex + 1}`}
                     >
                         {slotIndex + 1}
                     </button>
@@ -66,10 +66,10 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
                   if (item.image) onZoom(item.image);
               }}
               className="w-full px-2 py-1 text-xs bg-slate-500 text-white font-semibold rounded-md hover:bg-slate-600 transition-colors flex items-center justify-center gap-1"
-              title="Zoom Image"
+              title="縮放圖片"
           >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h1V7a1 1 0 011-1z" clipRule="evenodd" /></svg>
-              Zoom
+              縮放
           </button>
           <button
             onClick={(e) => {
@@ -79,9 +79,9 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
               }
             }}
             className="w-full px-2 py-1 text-xs bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors"
-            title="Save"
+            title="儲存"
           >
-            Save Image
+            儲存圖片
           </button>
         </div>
         <button
@@ -90,8 +90,8 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
                 onDelete(item);
             }}
             className="absolute top-1 right-1 w-5 h-5 bg-red-600/90 text-white rounded-full flex items-center justify-center text-sm font-bold opacity-0 group-hover:opacity-100 hover:bg-red-700 transition-all transform hover:scale-110"
-            title="Delete from history"
-            aria-label={`Delete history item ${index + 1}`}
+            title="從歷史紀錄中刪除"
+            aria-label={`刪除歷史紀錄項目 ${index + 1}`}
         >
           &times;
         </button>
@@ -102,22 +102,22 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
   return (
     <div className="w-full max-w-5xl mt-8">
       <div className="flex justify-center items-center mb-4 relative">
-        <h3 className="text-xl font-semibold text-white text-center">History (Last 10)</h3>
+        <h3 className="text-xl font-semibold text-white text-center">歷史紀錄 (最近 10 筆)</h3>
         <button
             onClick={onClearAll}
             className="absolute right-0 px-3 py-1 text-sm bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
-            title="Clear all history"
+            title="清除所有歷史紀錄"
         >
-            Clear All
+            全部清除
         </button>
       </div>
       <div className="flex space-x-4 p-4 bg-slate-800 rounded-lg shadow-lg overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900">
         {history.map((item, index) => (
-          item.image && <HistoryItem key={index} item={item} index={index} />
+          item.image && <HistoryItem key={`${item.image}-${index}`} item={item} index={index} />
         ))}
       </div>
     </div>
   );
 };
 
-export default HistoryPanel;
+export default React.memo(HistoryPanel);
