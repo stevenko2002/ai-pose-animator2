@@ -5,6 +5,7 @@ import PromptEditor from './components/PromptEditor';
 import GeneratedResult from './components/GeneratedImage';
 import HistoryPanel from './components/HistoryPanel';
 import ImageModal from './components/ImageModal';
+import SettingsManager from './components/SettingsManager';
 import { generateImageFromPose, editImageWithPrompt, generateImageFromPrompt } from './services/geminiService';
 import type { GenerationResult } from './types';
 
@@ -41,7 +42,6 @@ const App: React.FC = () => {
   const [uploadedImages, setUploadedImages] = useState<(string | null)[]>([null, null, null]);
   const [canvasImage, setCanvasImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<string>('');
-  const [promptTemplates, setPromptTemplates] = useState<string[]>([]);
   
   const [editMode, setEditMode] = useState<EditMode>(() => {
     const savedMode = localStorage.getItem('ai-pose-animator-editMode') as EditMode | null;
@@ -54,8 +54,27 @@ const App: React.FC = () => {
     return (savedRatio && validRatios.includes(savedRatio)) ? savedRatio : '1:1';
   });
 
+  const [promptTemplates, setPromptTemplates] = useState<string[]>(() => {
+    try {
+        const savedTemplates = localStorage.getItem('ai-pose-animator-promptTemplates');
+        return savedTemplates ? JSON.parse(savedTemplates) : [];
+    } catch (e) {
+        console.error("Failed to load prompt templates from localStorage", e);
+        return [];
+    }
+  });
+
+  const [generationHistory, setGenerationHistory] = useState<GenerationResult[]>(() => {
+    try {
+        const savedHistory = localStorage.getItem('ai-pose-animator-generationHistory');
+        return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch (e) {
+        console.error("Failed to load generation history from localStorage", e);
+        return [];
+    }
+  });
+  
   const [activeResult, setActiveResult] = useState<GenerationResult>({ image: null, text: null });
-  const [generationHistory, setGenerationHistory] = useState<GenerationResult[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +91,6 @@ const App: React.FC = () => {
         localStorage.setItem('ai-pose-animator-aspectRatio', aspectRatio);
     }
   }, [aspectRatio]);
-  
-    // Load and save prompt templates
-  useEffect(() => {
-    try {
-        const savedTemplates = localStorage.getItem('ai-pose-animator-promptTemplates');
-        if (savedTemplates) {
-            setPromptTemplates(JSON.parse(savedTemplates));
-        }
-    } catch (e) {
-        console.error("Failed to load prompt templates from localStorage", e);
-    }
-  }, []);
 
   useEffect(() => {
     try {
@@ -92,14 +99,31 @@ const App: React.FC = () => {
         console.error("Failed to save prompt templates to localStorage", e);
     }
   }, [promptTemplates]);
-
+  
+  useEffect(() => {
+    try {
+        localStorage.setItem('ai-pose-animator-generationHistory', JSON.stringify(generationHistory));
+    } catch (e) {
+        console.error("Failed to save generation history to localStorage", e);
+    }
+  }, [generationHistory]);
 
   const handleImageUpload = useCallback((images: (string | null)[]) => {
+    const previouslyHadImages = uploadedImages.some(img => img !== null);
+    const nowHasImages = images.some(img => img !== null);
+
     setUploadedImages(images);
-    if (!images[0] && aspectRatio === 'original') {
+
+    // If we just added the first image, switch to 'original' aspect ratio.
+    if (!previouslyHadImages && nowHasImages) {
+      setAspectRatio('original');
+    } 
+    // If we just removed the last image while 'original' was selected, switch back to '1:1'
+    // as 'original' becomes disabled.
+    else if (previouslyHadImages && !nowHasImages && aspectRatio === 'original') {
       setAspectRatio('1:1');
     }
-  }, [aspectRatio]);
+  }, [uploadedImages, aspectRatio]);
 
   const handleCanvasUpdate = useCallback((dataUrl: string | null) => {
     setCanvasImage(dataUrl);
@@ -205,6 +229,71 @@ const App: React.FC = () => {
     }
   };
   
+  const handleExportSettings = () => {
+    try {
+        const settingsToExport = {
+            editMode,
+            aspectRatio,
+            promptTemplates,
+            generationHistory,
+        };
+        const blob = new Blob([JSON.stringify(settingsToExport, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'ultra-nano-banana-settings.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Failed to export settings:', error);
+        alert('An error occurred while exporting settings.');
+    }
+  };
+
+  const handleImportSettings = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const data = JSON.parse(text);
+
+          const isValid =
+            data &&
+            typeof data === 'object' &&
+            ['pose', 'prompt'].includes(data.editMode) &&
+            ['1:1', '16:9', '4:3', '9:16', '3:4', 'original'].includes(data.aspectRatio) &&
+            Array.isArray(data.promptTemplates) &&
+            data.promptTemplates.every((item: any) => typeof item === 'string') &&
+            Array.isArray(data.generationHistory) &&
+            data.generationHistory.every((item: any) => 
+                typeof item === 'object' &&
+                (typeof item.image === 'string' || item.image === null) &&
+                (typeof item.text === 'string' || item.text === null)
+            );
+
+          if (isValid) {
+            setEditMode(data.editMode);
+            setAspectRatio(data.aspectRatio);
+            setPromptTemplates(data.promptTemplates);
+            setGenerationHistory(data.generationHistory);
+            setActiveResult({ image: null, text: null });
+            alert('Settings imported successfully!');
+          } else {
+            alert('Error: The provided file is not a valid settings file or is corrupted.');
+          }
+        } catch (error) {
+          console.error('Failed to import settings:', error);
+          alert('Error: Failed to read or parse the settings file.');
+        }
+      };
+      reader.readAsText(file);
+  };
+
   const hasImages = uploadedImages.some(img => img !== null);
   const hasPrompt = prompt.trim().length > 0;
   const hasPose = !!canvasImage;
@@ -329,7 +418,8 @@ const App: React.FC = () => {
         {zoomedImage && <ImageModal src={zoomedImage} onClose={() => setZoomedImage(null)} />}
       </main>
 
-      <footer className="mt-12 text-center text-slate-500 text-sm">
+      <footer className="mt-12 text-center text-slate-500 text-sm space-y-4">
+        <SettingsManager onExport={handleExportSettings} onImport={handleImportSettings} />
         <p>Powered by Google Gemini. Built with React & Tailwind CSS.</p>
       </footer>
     </div>
