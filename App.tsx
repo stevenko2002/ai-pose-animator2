@@ -6,7 +6,7 @@ import PromptEditor from './components/PromptEditor';
 import GeneratedResult from './components/GeneratedImage';
 import HistoryPanel from './components/HistoryPanel';
 import ImageModal from './components/ImageModal';
-import { generateImageFromPose, editImageWithPrompt, generatePromptSuggestion } from './services/geminiService';
+import { generateImageFromPose, editImageWithPrompt, generatePromptSuggestion, generateImageFromPrompt } from './services/geminiService';
 import type { GenerationResult } from './types';
 
 type AspectRatio = '1:1' | '16:9' | '4:3' | '9:16' | '3:4' | 'original';
@@ -173,22 +173,9 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     const validImages = uploadedImages.filter((img): img is string => img !== null);
+    const hasPrompt = !!prompt && prompt.trim().length > 0;
 
-    if (validImages.length === 0) {
-      setError("Please upload at least one image first.");
-      setActiveResult({ image: null, text: null });
-      return;
-    }
-
-    const isPoseModeReady = editMode === 'pose' && !!canvasImage;
-    const isPromptModeReady = editMode === 'prompt' && !!prompt && prompt.trim().length > 0;
-
-    if (!isPoseModeReady && !isPromptModeReady) {
-        setError(editMode === 'pose' ? "Please draw a pose on the canvas first." : "Please enter a text prompt.");
-        setActiveResult({ image: null, text: null });
-        return;
-    }
-
+    // Common setup
     setIsLoading(true);
     setError(null);
     setActiveResult({ image: null, text: null });
@@ -196,26 +183,39 @@ const App: React.FC = () => {
 
     try {
       let result: GenerationResult;
-      setLoadingMessage('Generating your image...');
       
       let finalAspectRatio: string = aspectRatio;
-      if (aspectRatio === 'original' && uploadedImages[0]) {
-        finalAspectRatio = await getAspectRatioFromDataUrl(uploadedImages[0]);
-      } else if (aspectRatio === 'original') {
-        finalAspectRatio = '1:1';
+      if (aspectRatio === 'original') {
+        finalAspectRatio = validImages.length > 0 ? await getAspectRatioFromDataUrl(validImages[0]) : '1:1';
       }
 
-      if (isPoseModeReady) {
-        result = await generateImageFromPose(validImages, canvasImage!, finalAspectRatio);
-      } else if (isPromptModeReady) {
+      // Case 1: Prompt mode with NO images (Text-to-Image)
+      if (editMode === 'prompt' && hasPrompt && validImages.length === 0) {
+        setLoadingMessage('Creating image from prompt...');
+        result = await generateImageFromPrompt(prompt!, finalAspectRatio);
+      } 
+      // Case 2: Pose mode (requires images and pose)
+      else if (editMode === 'pose' && canvasImage && validImages.length > 0) {
+        setLoadingMessage('Generating image from pose...');
+        result = await generateImageFromPose(validImages, canvasImage, finalAspectRatio);
+      }
+      // Case 3: Prompt mode WITH images (Image Editing)
+      else if (editMode === 'prompt' && hasPrompt && validImages.length > 0) {
+        setLoadingMessage('Editing image with prompt...');
         result = await editImageWithPrompt(validImages, prompt!, finalAspectRatio);
-      } else {
-          throw new Error("Invalid generation state.");
+      }
+      // Case 4: Invalid state (should be caught by disabled button, but as a fallback)
+      else {
+          let errorMessage = "Please check your inputs. ";
+          if (validImages.length === 0) errorMessage += "An input image is required for this mode. ";
+          if (editMode === 'pose' && !canvasImage) errorMessage += "A pose drawing is required. ";
+          if (editMode === 'prompt' && !hasPrompt) errorMessage += "A text prompt is required. ";
+          throw new Error(errorMessage.trim());
       }
       
+      // Common result handling
       setActiveResult(result);
       setGenerationHistory(prev => [result, ...prev].slice(0, 10));
-
       if (result.image) {
           generatePromptSuggestion(result.image)
             .then(setPromptSuggestion)
@@ -231,10 +231,23 @@ const App: React.FC = () => {
       setLoadingMessage('');
     }
   };
+  
+  const hasImages = uploadedImages.some(img => img !== null);
+  const hasPrompt = prompt && prompt.trim().length > 0;
+  const hasPose = !!canvasImage;
 
-  const isGenerateDisabled = uploadedImages.every(img => img === null) || isLoading || (editMode === 'pose' && !canvasImage) || (editMode === 'prompt' && (!prompt || prompt.trim().length === 0));
-  const isOriginalDisabled = !uploadedImages[0];
+  let isGenerateDisabled = isLoading;
+  if (!isGenerateDisabled) {
+      if (editMode === 'pose') {
+          isGenerateDisabled = !hasImages || !hasPose;
+      } else if (editMode === 'prompt') {
+          isGenerateDisabled = !hasPrompt;
+      }
+  }
+
+  const isOriginalDisabled = !hasImages;
   const uploadedImageCount = uploadedImages.filter(Boolean).length;
+  const generateButtonText = isLoading ? (loadingMessage || 'Generating...') : (editMode === 'prompt' && !hasImages) ? '✨ Create Image' : '✨ Generate Image';
 
   const AspectRatioButton: React.FC<{ value: AspectRatio; label: string; disabled?: boolean }> = ({ value, label, disabled }) => (
     <button
@@ -292,6 +305,7 @@ const App: React.FC = () => {
                     templates={promptTemplates}
                     onSaveTemplate={handleSavePromptTemplate}
                     onDeleteTemplate={handleDeletePromptTemplate}
+                    uploadedImageCount={uploadedImageCount}
                 />
             )}
           </div>
@@ -315,7 +329,7 @@ const App: React.FC = () => {
               disabled={isGenerateDisabled}
               className={`px-10 py-4 text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 ${isLoading ? 'animate-pulse' : ''}`}
             >
-              {isLoading ? (loadingMessage || 'Generating...') : '✨ Generate Image'}
+              {generateButtonText}
             </button>
         </div>
 

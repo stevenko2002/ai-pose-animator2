@@ -9,11 +9,12 @@ interface PromptEditorProps {
   templates: string[];
   onSaveTemplate: (prompt: string) => void;
   onDeleteTemplate: (prompt: string) => void;
+  uploadedImageCount: number;
 }
 
 const PromptEditor: React.FC<PromptEditorProps> = ({ 
     prompt, onPromptChange, suggestion, onRandomize,
-    templates, onSaveTemplate, onDeleteTemplate
+    templates, onSaveTemplate, onDeleteTemplate, uploadedImageCount
 }) => {
 
   const handlePromptChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -39,9 +40,15 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
   const hasSuggestion = suggestion && suggestion.trim().length > 0;
   const isSaveDisabled = !prompt || prompt.trim().length === 0;
 
+  const isCreateMode = uploadedImageCount === 0;
+  const title = isCreateMode ? "2. Describe Image to Create" : "2. Describe Your Edit";
+  const placeholderText = isCreateMode
+    ? "e.g., 'a majestic lion wearing a crown, photorealistic'..."
+    : "e.g., 'put the person from image 1 on the beach from image 2', or 'give the person in image 1 a red hat'...";
+
   return (
     <div className="flex flex-col items-center justify-start w-full h-full p-4 bg-slate-800 rounded-lg shadow-lg">
-      <h3 className="text-xl font-semibold text-white mb-4">2. Describe Your Edit</h3>
+      <h3 className="text-xl font-semibold text-white mb-4">{title}</h3>
       
       <div className="w-full max-w-[350px] mb-4">
         <p className="text-sm font-medium text-slate-400 mb-2">Templates</p>
@@ -103,7 +110,7 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
       <textarea
         value={prompt || ''}
         onChange={handlePromptChange}
-        placeholder="e.g., 'put the person from image 1 on the beach from image 2', or 'give the person in image 1 a red hat'..."
+        placeholder={placeholderText}
         className="w-full max-w-[350px] flex-grow p-4 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[200px]"
         aria-label="Prompt for image editing"
       />
