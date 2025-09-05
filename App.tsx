@@ -1,13 +1,16 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import DrawingCanvas from './components/DrawingCanvas';
 import PromptEditor from './components/PromptEditor';
-import GeneratedImage from './components/GeneratedImage';
+import GeneratedResult from './components/GeneratedImage';
 import HistoryPanel from './components/HistoryPanel';
-import { generateImageFromPose, editImageWithPrompt, generatePromptSuggestion } from './services/geminiService';
+import { generateImageFromPose, editImageWithPrompt, generatePromptSuggestion, generateVideoFromPose } from './services/geminiService';
 import type { GenerationResult } from './types';
 
 type AspectRatio = '1:1' | '16:9' | '4:3' | '9:16' | '3:4' | 'original';
+type EditMode = 'pose' | 'prompt';
+type OutputMode = 'image' | 'video';
 
 // Helper to calculate the greatest common divisor
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
@@ -54,11 +57,14 @@ const App: React.FC = () => {
   const [canvasImage, setCanvasImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [promptSuggestion, setPromptSuggestion] = useState<string | null>(getRandomInitialPrompt);
+  const [promptTemplates, setPromptTemplates] = useState<string[]>([]);
   
-  const [editMode, setEditMode] = useState<'pose' | 'prompt'>(() => {
-    const savedMode = localStorage.getItem('ai-pose-animator-editMode');
-    return (savedMode === 'pose' || savedMode === 'prompt') ? savedMode : 'pose';
+  const [editMode, setEditMode] = useState<EditMode>(() => {
+    const savedMode = localStorage.getItem('ai-pose-animator-editMode') as EditMode | null;
+    return savedMode || 'pose';
   });
+
+  const [outputMode, setOutputMode] = useState<OutputMode>('image');
 
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(() => {
     const savedRatio = localStorage.getItem('ai-pose-animator-aspectRatio') as AspectRatio | null;
@@ -66,28 +72,51 @@ const App: React.FC = () => {
     return (savedRatio && validRatios.includes(savedRatio)) ? savedRatio : '1:1';
   });
 
-  const [activeResult, setActiveResult] = useState<GenerationResult>({ image: null, text: null });
+  const [activeResult, setActiveResult] = useState<GenerationResult>({ image: null, video: null, text: null });
   const [generationHistory, setGenerationHistory] = useState<GenerationResult[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [clearCanvasTrigger, setClearCanvasTrigger] = useState(0);
 
   // Save settings to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('ai-pose-animator-editMode', editMode);
+    // Video mode is only available for pose editing, switch to image if mode changes
+    if (editMode === 'prompt') {
+        setOutputMode('image');
+    }
   }, [editMode]);
 
   useEffect(() => {
-    // Do not persist 'original' as it depends on a specific image being present,
-    // which won't be the case on a fresh page load.
     if (aspectRatio !== 'original') {
         localStorage.setItem('ai-pose-animator-aspectRatio', aspectRatio);
     }
   }, [aspectRatio]);
+  
+    // Load and save prompt templates
+  useEffect(() => {
+    try {
+        const savedTemplates = localStorage.getItem('ai-pose-animator-promptTemplates');
+        if (savedTemplates) {
+            setPromptTemplates(JSON.parse(savedTemplates));
+        }
+    } catch (e) {
+        console.error("Failed to load prompt templates from localStorage", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+        localStorage.setItem('ai-pose-animator-promptTemplates', JSON.stringify(promptTemplates));
+    } catch (e) {
+        console.error("Failed to save prompt templates to localStorage", e);
+    }
+  }, [promptTemplates]);
+
 
   const handleImageUpload = useCallback((images: (string | null)[]) => {
     setUploadedImages(images);
-    // If 'original' was selected but the first image is now removed, reset to default.
     if (!images[0] && aspectRatio === 'original') {
       setAspectRatio('1:1');
     }
@@ -104,8 +133,8 @@ const App: React.FC = () => {
   const handleUseAsInput = useCallback((image: string) => {
     setUploadedImages([image, null, null]);
     setCanvasImage(null);
-    setPromptSuggestion(getRandomInitialPrompt()); // Set new random suggestion
-    setActiveResult({ image: null, text: null }); // Clear current result
+    setPromptSuggestion(getRandomInitialPrompt());
+    setActiveResult({ image: null, video: null, text: null });
     setError(null);
     setClearCanvasTrigger(c => c + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -119,12 +148,24 @@ const App: React.FC = () => {
     setPromptSuggestion(getRandomInitialPrompt());
   }, []);
 
+  const handleSavePromptTemplate = useCallback((template: string) => {
+    const trimmedTemplate = template.trim();
+    if (trimmedTemplate && !promptTemplates.includes(trimmedTemplate)) {
+        setPromptTemplates(prev => [trimmedTemplate, ...prev].slice(0, 20)); // Limit to 20 templates
+    }
+  }, [promptTemplates]);
+
+  const handleDeletePromptTemplate = useCallback((template: string) => {
+    setPromptTemplates(prev => prev.filter(t => t !== template));
+  }, []);
+
+
   const handleGenerate = async () => {
     const validImages = uploadedImages.filter((img): img is string => img !== null);
 
     if (validImages.length === 0) {
       setError("Please upload at least one image first.");
-      setActiveResult({ image: null, text: null });
+      setActiveResult({ image: null, video: null, text: null });
       return;
     }
 
@@ -132,58 +173,62 @@ const App: React.FC = () => {
     const isPromptModeReady = editMode === 'prompt' && !!prompt && prompt.trim().length > 0;
 
     if (!isPoseModeReady && !isPromptModeReady) {
-        if (editMode === 'pose') {
-            setError("Please draw a pose on the canvas first.");
-        } else {
-            setError("Please enter a text prompt to describe your desired edits.");
-        }
-        setActiveResult({ image: null, text: null });
+        setError(editMode === 'pose' ? "Please draw a pose on the canvas first." : "Please enter a text prompt.");
+        setActiveResult({ image: null, video: null, text: null });
         return;
     }
 
     setIsLoading(true);
     setError(null);
-    setActiveResult({ image: null, text: null });
-    setPromptSuggestion(null); // Clear previous suggestion
+    setActiveResult({ image: null, video: null, text: null });
+    setPromptSuggestion(null);
 
     try {
-      let finalAspectRatio: string = aspectRatio;
-      if (aspectRatio === 'original') {
-        if (uploadedImages[0]) {
+      let result: GenerationResult;
+
+      if (outputMode === 'video' && isPoseModeReady) {
+        setLoadingMessage('Initializing video generation...');
+        result = await generateVideoFromPose(validImages[0], canvasImage!, setLoadingMessage);
+      } else {
+        setLoadingMessage('Generating your image...');
+        let finalAspectRatio: string = aspectRatio;
+        if (aspectRatio === 'original' && uploadedImages[0]) {
           finalAspectRatio = await getAspectRatioFromDataUrl(uploadedImages[0]);
-        } else {
+        } else if (aspectRatio === 'original') {
           finalAspectRatio = '1:1';
         }
-      }
 
-      let result: GenerationResult;
-      if (isPoseModeReady) {
-        result = await generateImageFromPose(validImages, canvasImage!, finalAspectRatio);
-      } else if (isPromptModeReady) {
-        result = await editImageWithPrompt(validImages, prompt!, finalAspectRatio);
-      } else {
-          throw new Error("Invalid generation state.");
+        if (isPoseModeReady) {
+          result = await generateImageFromPose(validImages, canvasImage!, finalAspectRatio);
+        } else if (isPromptModeReady) {
+          result = await editImageWithPrompt(validImages, prompt!, finalAspectRatio);
+        } else {
+            throw new Error("Invalid generation state.");
+        }
       }
+      
       setActiveResult(result);
       setGenerationHistory(prev => [result, ...prev].slice(0, 10));
 
-      // Asynchronously generate a new prompt suggestion based on the result
       if (result.image) {
           generatePromptSuggestion(result.image)
             .then(setPromptSuggestion)
             .catch(err => {
                 console.error("Failed to generate prompt suggestion:", err);
-                setPromptSuggestion(null); // Clear suggestion on error
+                setPromptSuggestion(getRandomInitialPrompt());
             });
       }
     } catch (err: any) {
       setError(err.message || "An unknown error occurred.");
     } finally {
       setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
   const isGenerateDisabled = uploadedImages.every(img => img === null) || isLoading || (editMode === 'pose' && !canvasImage) || (editMode === 'prompt' && (!prompt || prompt.trim().length === 0));
+  const isOriginalDisabled = !uploadedImages[0];
+  const uploadedImageCount = uploadedImages.filter(Boolean).length;
 
   const AspectRatioButton: React.FC<{ value: AspectRatio; label: string; disabled?: boolean }> = ({ value, label, disabled }) => (
     <button
@@ -196,9 +241,6 @@ const App: React.FC = () => {
     </button>
   );
 
-  const isOriginalDisabled = !uploadedImages[0];
-  const uploadedImageCount = uploadedImages.filter(Boolean).length;
-
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-8 font-sans">
       <header className="text-center mb-8">
@@ -206,13 +248,17 @@ const App: React.FC = () => {
           AI Pose Animator
         </h1>
         <p className="text-slate-400 mt-2 max-w-2xl">
-          Upload up to 3 photos, then draw a pose or describe an edit, and let AI bring your vision to life!
+          Upload photos, then draw a pose or describe an edit, and let AI bring your vision to life as an image or video!
         </p>
       </header>
       
       <main className="w-full flex flex-col items-center">
         <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-8">
-          <ImageUploader onImageUpload={handleImageUpload} images={uploadedImages} />
+          <ImageUploader 
+            onImageUpload={handleImageUpload} 
+            images={uploadedImages}
+            notice={outputMode === 'video' ? 'Video generation will use the first uploaded image.' : undefined}
+          />
           <div className="flex flex-col w-full h-full">
             <div className="flex justify-center mb-4 gap-2 p-1 bg-slate-700 rounded-lg">
                 <button 
@@ -238,6 +284,9 @@ const App: React.FC = () => {
                     onPromptChange={handlePromptChange} 
                     suggestion={promptSuggestion}
                     onRandomize={handleRandomizeSuggestion}
+                    templates={promptTemplates}
+                    onSaveTemplate={handleSavePromptTemplate}
+                    onDeleteTemplate={handleDeletePromptTemplate}
                 />
             )}
           </div>
@@ -254,15 +303,34 @@ const App: React.FC = () => {
                 <AspectRatioButton value="original" label="Original" disabled={isOriginalDisabled} />
             </div>
         </div>
+        
+        <div className="my-6 flex flex-col items-center gap-4">
+            <div className="flex justify-center gap-2 p-1 bg-slate-700 rounded-lg" role="radiogroup" aria-label="Output mode">
+                <button 
+                    onClick={() => setOutputMode('image')} 
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors w-28 ${outputMode === 'image' ? 'bg-sky-600 text-white shadow' : 'bg-transparent text-slate-300 hover:bg-slate-600'}`}
+                    role="radio" aria-checked={outputMode === 'image'}
+                >
+                    Image
+                </button>
+                <button 
+                    onClick={() => setOutputMode('video')} 
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors w-28 ${outputMode === 'video' ? 'bg-sky-600 text-white shadow' : 'bg-transparent text-slate-300 hover:bg-slate-600'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    role="radio" aria-checked={outputMode === 'video'}
+                    disabled={editMode === 'prompt'}
+                    title={editMode === 'prompt' ? "Video mode is only available when drawing a pose" : ""}
+                >
+                    Video
+                </button>
+            </div>
 
-        <div className="my-2">
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerateDisabled}
-            className={`px-10 py-4 text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 ${isLoading ? 'animate-pulse' : ''}`}
-          >
-            {isLoading ? 'Generating...' : '✨ Generate Image'}
-          </button>
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerateDisabled}
+              className={`px-10 py-4 text-xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-lg hover:from-purple-700 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 ${isLoading ? 'animate-pulse' : ''}`}
+            >
+              {isLoading ? (loadingMessage || 'Generating...') : `✨ Generate ${outputMode === 'video' ? 'Video' : 'Image'}`}
+            </button>
         </div>
 
         <HistoryPanel
@@ -270,16 +338,20 @@ const App: React.FC = () => {
             onSelect={handleSelectFromHistory}
             onUseAsInput={handleUseAsInput}
             activeImageSrc={activeResult.image}
+            activeVideoSrc={activeResult.video}
         />
 
-        <GeneratedImage 
+        <GeneratedResult
           imageSrc={activeResult.image}
+          videoSrc={activeResult.video}
           text={activeResult.text}
           isLoading={isLoading}
+          loadingMessage={loadingMessage}
           error={error}
           onUseAsInput={handleUseAsInput}
           uploadedImageCount={uploadedImageCount}
           aspectRatio={aspectRatio}
+          outputMode={outputMode}
         />
       </main>
 

@@ -3,9 +3,10 @@ import React, { useState, useCallback, useEffect } from 'react';
 interface ImageUploaderProps {
   onImageUpload: (images: (string | null)[]) => void;
   images: (string | null)[];
+  notice?: string;
 }
 
-const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: imagesProp }) => {
+const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: imagesProp, notice }) => {
   const [images, setImages] = useState<(string | null)[]>(imagesProp);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
@@ -105,7 +106,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
             <div className="text-center text-slate-400 p-4 pointer-events-none">
                 {isDraggingOver ? (
                     <>
-                        <svg xmlns="http://www.w.org/2000/svg" className="mx-auto h-12 w-12 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                         <p className="mt-2 font-semibold">Drop image here</p>
                     </>
                 ) : (
@@ -141,6 +142,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
   return (
     <div className="flex flex-col items-center justify-start w-full h-full p-4 bg-slate-800 rounded-lg shadow-lg">
        <h3 className="text-xl font-semibold text-white mb-4">1. Upload Images (up to 3)</h3>
+       {notice && <p className="text-sm text-center text-amber-400 mb-3 -mt-2">{notice}</p>}
        <div className="w-full max-w-sm space-y-6">
           <UploadSlot index={0} />
           <UploadSlot index={1} />

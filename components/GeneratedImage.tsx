@@ -1,36 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-interface GeneratedImageProps {
+interface GeneratedResultProps {
     imageSrc: string | null;
+    videoSrc: string | null;
     text: string | null;
     isLoading: boolean;
+    loadingMessage: string;
     error: string | null;
     onUseAsInput: (image: string) => void;
     uploadedImageCount: number;
     aspectRatio: string;
+    outputMode: 'image' | 'video';
 }
 
-const LoadingSpinner: React.FC<{ uploadedImageCount: number; aspectRatio: string; }> = ({ uploadedImageCount, aspectRatio }) => {
-    const imageText = uploadedImageCount === 1 ? 'image' : 'images';
-    const ratioText = aspectRatio === 'original' ? 'the original aspect ratio' : `a ${aspectRatio} aspect ratio`;
-
+const LoadingSpinner: React.FC<{ loadingMessage: string }> = ({ loadingMessage }) => {
     return (
         <div className="flex flex-col items-center justify-center space-y-4 text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-sky-500"></div>
-            <p className="text-white text-lg">Generating your image...</p>
-            {uploadedImageCount > 0 && (
-                <p className="text-slate-300 text-sm">
-                    Using {uploadedImageCount} {imageText} with {ratioText}.
-                </p>
-            )}
+            <p className="text-white text-lg">{loadingMessage}</p>
         </div>
     );
 };
 
-const GeneratedImage: React.FC<GeneratedImageProps> = ({ imageSrc, text, isLoading, error, onUseAsInput, uploadedImageCount, aspectRatio }) => {
-    const downloadImage = (dataUrl: string, filename: string) => {
+const GeneratedResult: React.FC<GeneratedResultProps> = ({ 
+    imageSrc, videoSrc, text, isLoading, loadingMessage, error, 
+    onUseAsInput, uploadedImageCount, aspectRatio, outputMode 
+}) => {
+    
+    const downloadMedia = (url: string, filename: string) => {
         const link = document.createElement('a');
-        link.href = dataUrl;
+        link.href = url;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
@@ -42,7 +41,7 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ imageSrc, text, isLoadi
             <h3 className="text-2xl font-bold text-white mb-4">Generated Result</h3>
             <div className="w-full h-full flex items-center justify-center">
                 {isLoading ? (
-                    <LoadingSpinner uploadedImageCount={uploadedImageCount} aspectRatio={aspectRatio} />
+                    <LoadingSpinner loadingMessage={loadingMessage} />
                 ) : error ? (
                     <div className="w-full max-w-md text-center bg-red-900/50 border border-red-700 p-6 rounded-lg flex flex-col items-center gap-4">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -65,10 +64,31 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ imageSrc, text, isLoadi
                                 ✨ Use as Input
                             </button>
                             <button
-                                onClick={() => downloadImage(imageSrc, 'generated_image.png')}
+                                onClick={() => downloadMedia(imageSrc, 'generated_image.png')}
                                 className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
                             >
                                 Save Image
+                            </button>
+                        </div>
+                    </div>
+                ) : videoSrc ? (
+                     <div className="flex flex-col items-center">
+                        <video 
+                            src={videoSrc} 
+                            controls 
+                            autoPlay 
+                            loop 
+                            muted
+                            playsInline
+                            className="max-w-full max-h-[500px] rounded-md shadow-2xl" 
+                        />
+                        {text && <p className="mt-4 text-slate-300 italic text-center">"{text}"</p>}
+                        <div className="mt-6 flex flex-wrap justify-center gap-4">
+                            <button
+                                onClick={() => downloadMedia(videoSrc, 'generated_video.mp4')}
+                                className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+                            >
+                                Save Video
                             </button>
                         </div>
                     </div>
@@ -77,7 +97,7 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ imageSrc, text, isLoadi
                          <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                          </svg>
-                        <p className="mt-2">Your AI-generated image will appear here.</p>
+                        <p className="mt-2">Your AI-generated image or video will appear here.</p>
                     </div>
                 )}
             </div>
@@ -85,4 +105,4 @@ const GeneratedImage: React.FC<GeneratedImageProps> = ({ imageSrc, text, isLoadi
     );
 };
 
-export default GeneratedImage;
+export default GeneratedResult;
