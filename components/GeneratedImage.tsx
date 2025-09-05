@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 
 interface GeneratedResultProps {
     imageSrc: string | null;
-    videoSrc: string | null;
     text: string | null;
     isLoading: boolean;
     loadingMessage: string;
@@ -10,7 +9,6 @@ interface GeneratedResultProps {
     onUseAsInput: (image: string) => void;
     uploadedImageCount: number;
     aspectRatio: string;
-    outputMode: 'image' | 'video';
 }
 
 const LoadingSpinner: React.FC<{ loadingMessage: string }> = ({ loadingMessage }) => {
@@ -23,8 +21,8 @@ const LoadingSpinner: React.FC<{ loadingMessage: string }> = ({ loadingMessage }
 };
 
 const GeneratedResult: React.FC<GeneratedResultProps> = ({ 
-    imageSrc, videoSrc, text, isLoading, loadingMessage, error, 
-    onUseAsInput, uploadedImageCount, aspectRatio, outputMode 
+    imageSrc, text, isLoading, loadingMessage, error, 
+    onUseAsInput, uploadedImageCount, aspectRatio
 }) => {
     
     const downloadMedia = (url: string, filename: string) => {
@@ -71,33 +69,12 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
                             </button>
                         </div>
                     </div>
-                ) : videoSrc ? (
-                     <div className="flex flex-col items-center">
-                        <video 
-                            src={videoSrc} 
-                            controls 
-                            autoPlay 
-                            loop 
-                            muted
-                            playsInline
-                            className="max-w-full max-h-[500px] rounded-md shadow-2xl" 
-                        />
-                        {text && <p className="mt-4 text-slate-300 italic text-center">"{text}"</p>}
-                        <div className="mt-6 flex flex-wrap justify-center gap-4">
-                            <button
-                                onClick={() => downloadMedia(videoSrc, 'generated_video.mp4')}
-                                className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
-                            >
-                                Save Video
-                            </button>
-                        </div>
-                    </div>
                 ) : (
                     <div className="text-center text-slate-400">
                          <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                          </svg>
-                        <p className="mt-2">Your AI-generated image or video will appear here.</p>
+                        <p className="mt-2">Your AI-generated image will appear here.</p>
                     </div>
                 )}
             </div>

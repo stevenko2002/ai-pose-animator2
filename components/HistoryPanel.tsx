@@ -5,11 +5,11 @@ interface HistoryPanelProps {
   history: GenerationResult[];
   onSelect: (result: GenerationResult) => void;
   onUseAsInput: (image: string) => void;
+  onZoom: (url: string) => void;
   activeImageSrc: string | null;
-  activeVideoSrc: string | null;
 }
 
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsInput, activeImageSrc, activeVideoSrc }) => {
+const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsInput, onZoom, activeImageSrc }) => {
   if (history.length === 0) {
     return null;
   }
@@ -24,65 +24,52 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
   };
 
   const HistoryItem: React.FC<{ item: GenerationResult, index: number }> = ({ item, index }) => {
-    const isActive = (item.image && item.image === activeImageSrc) || (item.video && item.video === activeVideoSrc);
-    const isVideo = !!item.video;
+    const isActive = item.image && item.image === activeImageSrc;
     
     return (
       <div
         className="group relative flex-shrink-0 w-32 h-32 rounded-md overflow-hidden cursor-pointer bg-slate-900"
         onClick={() => onSelect(item)}
       >
-        {isVideo ? (
-            <video
-                src={item.video!}
-                muted
-                playsInline
-                onMouseEnter={(e) => e.currentTarget.play()}
-                onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
-                className={`w-full h-full object-cover transition-all duration-300 ${isActive ? 'ring-4 ring-sky-500' : 'ring-2 ring-transparent group-hover:ring-sky-600'}`}
-            />
-        ) : (
-            <img
-                src={item.image!}
-                alt={`History item ${index + 1}`}
-                className={`w-full h-full object-cover transition-all duration-300 ${isActive ? 'ring-4 ring-sky-500' : 'ring-2 ring-transparent group-hover:ring-sky-600'}`}
-            />
-        )}
-        
-        {isVideo && (
-             <div className="absolute top-1 left-1 bg-black/50 p-1 rounded-full pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 001.553.832l3-2a1 1 0 000-1.664l-3-2z" />
-                </svg>
-             </div>
-        )}
+        <img
+            src={item.image!}
+            alt={`History item ${index + 1}`}
+            className={`w-full h-full object-cover transition-all duration-300 ${isActive ? 'ring-4 ring-sky-500' : 'ring-2 ring-transparent group-hover:ring-sky-600'}`}
+        />
 
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-2 space-y-1">
-          {!isVideo && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (item.image) onUseAsInput(item.image);
-              }}
-              className="w-full px-2 py-1 text-xs bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
-              title="Use as Input"
-            >
-              ✨ Use as Input
-            </button>
-          )}
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center p-2 space-y-1">
           <button
             onClick={(e) => {
               e.stopPropagation();
-              const url = item.video || item.image;
-              if (url) {
-                const filename = isVideo ? `history_video_${index + 1}.mp4` : `history_image_${index + 1}.png`;
-                downloadMedia(url, filename);
+              if (item.image) onUseAsInput(item.image);
+            }}
+            className="w-full px-2 py-1 text-xs bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors"
+            title="Use as Input"
+          >
+            ✨ Use as Input
+          </button>
+           <button
+              onClick={(e) => {
+                  e.stopPropagation();
+                  if (item.image) onZoom(item.image);
+              }}
+              className="w-full px-2 py-1 text-xs bg-slate-500 text-white font-semibold rounded-md hover:bg-slate-600 transition-colors flex items-center justify-center gap-1"
+              title="Zoom Image"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h1V7a1 1 0 011-1z" clipRule="evenodd" /></svg>
+              Zoom
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.image) {
+                downloadMedia(item.image, `history_image_${index + 1}.png`);
               }
             }}
             className="w-full px-2 py-1 text-xs bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition-colors"
             title="Save"
           >
-            Save {isVideo ? 'Video' : 'Image'}
+            Save Image
           </button>
         </div>
       </div>
@@ -94,7 +81,7 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, onSelect, onUseAsI
       <h3 className="text-xl font-semibold text-white mb-4 text-center">History (Last 10)</h3>
       <div className="flex space-x-4 p-4 bg-slate-800 rounded-lg shadow-lg overflow-x-auto scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-900">
         {history.map((item, index) => (
-          (item.image || item.video) && <HistoryItem key={index} item={item} index={index} />
+          item.image && <HistoryItem key={index} item={item} index={index} />
         ))}
       </div>
     </div>
