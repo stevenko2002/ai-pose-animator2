@@ -322,6 +322,7 @@ const App: React.FC = () => {
           loadingMessage={loadingMessage}
           error={error}
           onUseAsInput={handleUseAsInput}
+          onZoom={handleZoomImage}
           uploadedImageCount={uploadedImageCount}
           aspectRatio={aspectRatio}
         />

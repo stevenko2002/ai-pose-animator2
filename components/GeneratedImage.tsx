@@ -7,6 +7,7 @@ interface GeneratedResultProps {
     loadingMessage: string;
     error: string | null;
     onUseAsInput: (image: string) => void;
+    onZoom: (image: string) => void;
     uploadedImageCount: number;
     aspectRatio: string;
 }
@@ -22,7 +23,7 @@ const LoadingSpinner: React.FC<{ loadingMessage: string }> = ({ loadingMessage }
 
 const GeneratedResult: React.FC<GeneratedResultProps> = ({ 
     imageSrc, text, isLoading, loadingMessage, error, 
-    onUseAsInput, uploadedImageCount, aspectRatio
+    onUseAsInput, onZoom, uploadedImageCount, aspectRatio
 }) => {
     
     const downloadMedia = (url: string, filename: string) => {
@@ -52,7 +53,19 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
                     </div>
                 ) : imageSrc ? (
                     <div className="flex flex-col items-center">
-                        <img src={imageSrc} alt="Generated" className="max-w-full max-h-[500px] rounded-md shadow-2xl" />
+                        <div
+                            onClick={() => onZoom(imageSrc)}
+                            className="cursor-zoom-in group relative"
+                            title="Click to zoom"
+                        >
+                            <img src={imageSrc} alt="Generated" className="max-w-full max-h-[500px] rounded-md shadow-2xl" />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-md">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                                </svg>
+                            </div>
+                        </div>
+
                         {text && <p className="mt-4 text-slate-300 italic text-center">"{text}"</p>}
                         <div className="mt-6 flex flex-wrap justify-center gap-4">
                             <button
@@ -60,6 +73,14 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
                                 className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
                             >
                                 ✨ Use as Input
+                            </button>
+                             <button
+                                onClick={() => onZoom(imageSrc)}
+                                className="px-6 py-2 bg-slate-500 text-white font-semibold rounded-lg hover:bg-slate-600 transition-colors flex items-center justify-center gap-2"
+                                title="Zoom Image"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8zm6-2a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1H5a1 1 0 110-2h1V7a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                                Zoom
                             </button>
                             <button
                                 onClick={() => downloadMedia(imageSrc, 'generated_image.png')}

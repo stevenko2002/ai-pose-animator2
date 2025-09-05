@@ -103,7 +103,7 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
       <textarea
         value={prompt || ''}
         onChange={handlePromptChange}
-        placeholder="e.g., 'make the person wear a red hat', 'change the background to a beach', 'turn the photo into a watercolor painting'..."
+        placeholder="e.g., 'put the person from image 1 on the beach from image 2', or 'give the person in image 1 a red hat'..."
         className="w-full max-w-[350px] flex-grow p-4 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[200px]"
         aria-label="Prompt for image editing"
       />

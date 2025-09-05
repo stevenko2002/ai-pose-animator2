@@ -94,11 +94,14 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
     return (
       <div className="w-full flex flex-col items-center">
         <div 
-            className={`w-full h-[200px] border-2 rounded-md flex items-center justify-center bg-slate-900 overflow-hidden transition-all duration-300 ${isDraggingOver ? 'border-solid border-sky-500 scale-105' : 'border-dashed border-slate-600'}`}
+            className={`relative w-full h-[200px] border-2 rounded-md flex items-center justify-center bg-slate-900 overflow-hidden transition-all duration-300 ${isDraggingOver ? 'border-solid border-sky-500 scale-105' : 'border-dashed border-slate-600'}`}
             onDragOver={(e) => handleDragOver(e, index)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, index)}
         >
+          <div className="absolute top-2 left-2 bg-slate-900/80 text-white rounded-full h-6 w-6 flex items-center justify-center text-sm font-bold border-2 border-slate-600 z-10">
+            {index + 1}
+          </div>
           {imagePreview ? (
             <img src={imagePreview} alt={`Preview ${index + 1}`} className="w-full h-full object-contain" />
           ) : (
@@ -110,7 +113,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
                     </>
                 ) : (
                     <>
-                        <svg xmlns="http://www.w.org/2000/svg" className="mx-auto h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         <p className="mt-2 text-sm">Drag & drop or choose file</p>
                     </>
                 )}
@@ -140,7 +143,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload, images: im
 
   return (
     <div className="flex flex-col items-center justify-start w-full h-full p-4 bg-slate-800 rounded-lg shadow-lg">
-       <h3 className="text-xl font-semibold text-white mb-4">1. Upload Images (up to 3)</h3>
+       <div className="text-center mb-4">
+            <h3 className="text-xl font-semibold text-white">1. Upload Images</h3>
+            <p className="text-sm text-slate-400 mt-1">Reference images as 1, 2, and 3 in your prompts.</p>
+       </div>
        <div className="w-full max-w-sm space-y-6">
           <UploadSlot index={0} />
           <UploadSlot index={1} />
