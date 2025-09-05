@@ -1,14 +1,15 @@
-
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 
 interface DrawingCanvasProps {
   onCanvasUpdate: (dataUrl: string | null) => void;
+  clearTrigger?: number;
 }
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate }) => {
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate, clearTrigger }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
+  const [hasContent, setHasContent] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -23,6 +24,35 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate }) => {
       }
     }
   }, []);
+  
+  const clearCanvas = useCallback(() => {
+    if (context && canvasRef.current) {
+      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      onCanvasUpdate(null);
+      setHasContent(false);
+    }
+  }, [context, onCanvasUpdate]);
+
+  useEffect(() => {
+    if (clearTrigger !== undefined) {
+        clearCanvas();
+    }
+  }, [clearTrigger, clearCanvas]);
+
+  const downloadImage = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSave = () => {
+    if (canvasRef.current) {
+        downloadImage(canvasRef.current.toDataURL('image/png'), 'pose_drawing.png');
+    }
+  };
 
   const getCoordinates = (event: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -59,13 +89,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate }) => {
     context.closePath();
     setIsDrawing(false);
     onCanvasUpdate(canvasRef.current.toDataURL('image/png'));
-  };
-
-  const clearCanvas = () => {
-    if (context && canvasRef.current) {
-      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      onCanvasUpdate(null);
-    }
+    setHasContent(true);
   };
 
   return (
@@ -84,12 +108,21 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ onCanvasUpdate }) => {
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
       />
-      <button
-        onClick={clearCanvas}
-        className="mt-4 px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
-      >
-        Clear Canvas
-      </button>
+      <div className="mt-4 flex flex-wrap justify-center gap-4">
+        <button
+          onClick={clearCanvas}
+          className="px-6 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+        >
+          Clear Canvas
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!hasContent}
+          className="px-6 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Save Pose
+        </button>
+      </div>
     </div>
   );
 };
