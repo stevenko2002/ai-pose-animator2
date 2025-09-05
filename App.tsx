@@ -264,7 +264,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center p-4 sm:p-8 font-sans">
       <header className="text-center mb-8">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-blue-500">
-          AI Pose Animator
+          Ultra Nano Banana app
         </h1>
         <p className="text-slate-400 mt-2 max-w-2xl">
           Upload photos, then draw a pose or describe an edit, and let AI bring your vision to life!
