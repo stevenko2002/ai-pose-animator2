@@ -52,7 +52,7 @@ export const generateImageFromPose = async (
   const poseImagePart = fileToGenerativePart(poseImage);
 
   const textPart = {
-    text: `Analyze the subjects in the input images and the stick figure pose in the final image. Generate a new image where the subjects from the input images are performing the exact pose from the stick figure image. The background, clothing, and appearance of the subjects should be preserved as closely as possible, only the pose should change. The final generated image must have a ${aspectRatio} aspect ratio.`,
+    text: `Analyze the subjects in the input images and the stick figure pose in the final image. Generate a new image where the subjects from the input images are performing the exact pose from the stick figure image. The background, clothing, and appearance of the subjects should be preserved as closely as possible, only the pose should change. The final generated image must have a ${aspectRatio} aspect ratio. If this requires changing the canvas size from the original image, intelligently expand the background and scene to fill the new space (outpainting). Do not crop, stretch, distort, or letterbox the original subject.`,
   };
 
   try {
@@ -91,7 +91,7 @@ export const editImageWithPrompt = async (
   const baseImageParts = baseImages.map(fileToGenerativePart);
 
   const textPart = {
-    text: `Based on the provided images and the following instruction, generate a new image. Instruction: "${prompt}". The final generated image must have a ${aspectRatio} aspect ratio.`,
+    text: `Based on the provided images and the following instruction, generate a new image. Instruction: "${prompt}". The final generated image must have a ${aspectRatio} aspect ratio. If the target aspect ratio is different from the input image, intelligently expand the background and scene to fill the new space (outpainting). Do not crop, stretch, distort, or letterbox the original content.`,
   };
 
   try {
