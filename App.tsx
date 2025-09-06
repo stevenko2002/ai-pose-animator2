@@ -32,6 +32,8 @@ type EditingState = {
   editMask?: string; 
   editAspectRatio?: string;
 };
+type AppMode = 'create' | 'img2img' | 'control';
+
 
 // Helper to calculate the greatest common divisor
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
@@ -71,6 +73,7 @@ const initialControlLayers = {
 
 
 const App: React.FC = () => {
+  const [currentMode, setCurrentMode] = useState<AppMode>('create');
   const [uploadedImages, setUploadedImages] = useState<(string | null)[]>([null, null, null]);
   const [prompt, setPrompt] = useState<string>('');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
@@ -186,9 +189,10 @@ const App: React.FC = () => {
       if (slotIndex >= 0 && slotIndex < 3) newImages[slotIndex] = image;
       return newImages;
     });
+    if (currentMode === 'create') setCurrentMode('img2img');
     setChatHistory([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [currentMode]);
 
   const handleSelectFromHistory = (result: GenerationResult) => {
     setResults([result]);
@@ -256,6 +260,7 @@ const App: React.FC = () => {
         setPoseKeypoints(keypoints);
         setPoseSourceImage(image);
         setControlLayers(prev => ({ ...prev, pose: { image: null, weight: 100 }, scribble: prev.scribble }));
+        setCurrentMode('control');
     } catch (err: any) {
         setError(err.message || "姿勢分析時發生未知錯誤。");
     } finally {
@@ -290,6 +295,7 @@ const App: React.FC = () => {
         const result = await service(image);
         if (result.image) {
             setControlLayers(prev => ({ ...prev, [type]: { image: result.image, weight: 100 } }));
+            setCurrentMode('control');
         } else { throw new Error('API 未返回控制圖。'); }
     } catch (err: any) {
         setError(err.message || `生成 ${type} 圖時失敗。`);
@@ -415,6 +421,118 @@ const App: React.FC = () => {
         setEditingState({ isActive: false, imageSrc: null });
     }
   };
+  
+  const handleUpscale = async (imageToUpscale: string) => {
+    setIsLoading(true);
+    setError(null);
+    setLoadingMessage('正在提升畫質，請稍候...');
+
+    const upscalePrompt = "提升此圖片的解析度至4K，增強細節，保持原始構圖和風格不變，使其更清晰銳利 / Upscale this image to 4K resolution, enhance details, maintain the original composition and style, make it sharper and clearer";
+
+    try {
+        const imageAspectRatio = await getAspectRatioFromDataUrl(imageToUpscale);
+        const currentSeed = (isSeedLocked && seed) ? parseInt(seed, 10) : null;
+
+        const upscaledResults = await editImageWithPrompt(
+            [imageToUpscale],
+            upscalePrompt,
+            "", // Use an empty negative prompt for a clean upscale
+            imageAspectRatio,
+            1, // Only one variation for upscale
+            null, // No character lock for upscale
+            null, // No style reference for upscale
+            styleStrength, // Keep style strength
+            false, // No Google Search for upscale
+            currentSeed
+        );
+
+        if (!upscaledResults || upscaledResults.length === 0 || !upscaledResults[0].image) {
+            throw new Error("畫質提升失敗，API 未返回圖片。");
+        }
+
+        const newResult = upscaledResults[0];
+
+        // Replace the old result with the new upscaled one
+        setResults(prevResults => prevResults.map(res =>
+            res.image === imageToUpscale ? newResult : res
+        ));
+
+        // Also update the history
+        setGenerationHistory(prevHistory => 
+            prevHistory.map(res =>
+                res.image === imageToUpscale ? newResult : res
+            )
+        );
+        
+        if (selectedHistoryImageSrc === imageToUpscale) {
+            setSelectedHistoryImageSrc(newResult.image);
+        }
+
+        if (newResult.seed && !isSeedLocked) {
+            setSeed(String(newResult.seed));
+        }
+
+    } catch (err: any) {
+        setError(err.message || "提升畫質時發生未知錯誤。");
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
+  };
+
+  const handleUpscaleFromUploader = async (imageToUpscale: string) => {
+    setIsLoading(true);
+    setError(null);
+    setResults([]);
+    setSelectedHistoryImageSrc(null);
+    setChatHistory([]);
+    setLoadingMessage('正在提升畫質，請稍候...');
+
+    const upscalePrompt = "提升此圖片的解析度至4K，增強細節，保持原始構圖和風格不變，使其更清晰銳利 / Upscale this image to 4K resolution, enhance details, maintain the original composition and style, make it sharper and clearer";
+
+    try {
+        const imageAspectRatio = await getAspectRatioFromDataUrl(imageToUpscale);
+        const currentSeed = isSeedLocked && seed ? parseInt(seed, 10) : null;
+
+        const upscaledResults = await editImageWithPrompt(
+            [imageToUpscale],
+            upscalePrompt,
+            "", // No negative prompt for upscale
+            imageAspectRatio,
+            1,    // Only one result
+            null, // No character lock
+            null, // No style reference
+            styleStrength,
+            false, // No Google Search
+            currentSeed
+        );
+
+        if (!upscaledResults || upscaledResults.length === 0 || !upscaledResults[0].image) {
+            throw new Error("畫質提升失敗，API 未返回圖片。");
+        }
+
+        const newResult = upscaledResults[0];
+
+        setResults([newResult]);
+        setGenerationHistory(prev => [newResult, ...prev].slice(0, 10));
+
+        if (newResult.seed && !isSeedLocked) {
+            setSeed(String(newResult.seed));
+        }
+        
+        // Scroll to results
+        const resultsElement = document.getElementById('generated-result-section');
+        if (resultsElement) {
+            resultsElement.scrollIntoView({ behavior: 'smooth' });
+        }
+
+    } catch (err: any) {
+        setError(err.message || "提升畫質時發生未知錯誤。");
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
+  };
 
   const handleStartBatch = async (promptsToProcess: string[]) => {
     setBatchPrompts(promptsToProcess);
@@ -499,6 +617,13 @@ const App: React.FC = () => {
         setResults([]); 
         setSelectedHistoryImageSrc(null);
         setChatHistory([]);
+        
+        if (data.uploadedImages?.some((img: string | null) => img)) {
+            setCurrentMode(data.controlLayers && Object.values(data.controlLayers).some((l: any) => l.image) ? 'control' : 'img2img');
+        } else {
+            setCurrentMode('create');
+        }
+        
         alert('專案已成功匯入！');
       } catch (err: any) {
         setError(err.message || '匯入專案時發生未知錯誤。');
@@ -545,6 +670,13 @@ const App: React.FC = () => {
     setResults([]); 
     setSelectedHistoryImageSrc(null);
     setChatHistory([]);
+
+    if (s.uploadedImages?.some((img: string | null) => img)) {
+        setCurrentMode(s.controlLayers && Object.values(s.controlLayers).some((l: any) => l.image) ? 'control' : 'img2img');
+    } else {
+        setCurrentMode('create');
+    }
+
     alert(`預設集 "${preset.name}" 已載入！`);
   };
 
@@ -561,6 +693,27 @@ const App: React.FC = () => {
           setAspectRatio(value.replace(/\s*\/\s*/, ':'));
       }
   };
+
+  const ModeSelector: React.FC<{ mode: AppMode; setMode: (mode: AppMode) => void; }> = ({ mode, setMode }) => {
+    const buttonStyle = "px-6 py-3 text-lg font-bold rounded-md transition-all duration-300 w-full";
+    const activeStyle = "bg-sky-600 text-white shadow-lg scale-105";
+    const inactiveStyle = "bg-slate-700 text-slate-300 hover:bg-slate-600";
+    
+    return (
+      <div className="w-full max-w-2xl flex justify-center items-center gap-4 mb-8 p-2 bg-slate-800 rounded-xl shadow-lg">
+        <button onClick={() => setMode('create')} className={`${buttonStyle} ${mode === 'create' ? activeStyle : inactiveStyle}`}>創作模式</button>
+        <button onClick={() => setMode('img2img')} className={`${buttonStyle} ${mode === 'img2img' ? activeStyle : inactiveStyle}`}>圖生圖模式</button>
+        <button onClick={() => setMode('control')} className={`${buttonStyle} ${mode === 'control' ? activeStyle : inactiveStyle}`}>精準控制模式</button>
+      </div>
+    );
+  };
+
+  const stepOffsets = {
+    create: { settings: 2 },
+    img2img: { settings: 3 },
+    control: { settings: 4 },
+  };
+  const currentSettingsStep = stepOffsets[currentMode].settings;
 
   const hasImages = uploadedImages.some(img => img !== null);
   const hasPrompt = prompt.trim().length > 0;
@@ -608,55 +761,129 @@ const App: React.FC = () => {
       </header>
       
       <main className="w-full flex flex-col items-center">
-        <div className="w-full max-w-7xl grid grid-cols-1 md:grid-cols-2 gap-8">
-          <ImageUploader 
-            onImageUpload={handleImageUpload} 
-            images={uploadedImages}
-            cropAspectRatio={parseAspectRatio(aspectRatio)}
-            onAnalyzePose={handleAnalyzePose}
-            analyzingPoseIndex={isAnalyzingPose}
-            onAnalyzeStyle={handleAnalyzeStyle}
-            analyzingStyleIndex={isAnalyzingStyle}
-            onGenerateControlMap={handleGenerateControlMap}
-            generatingControlMapIndex={generatingControlMap}
-            lockedCharacter={lockedCharacter}
-            onSetCharacterLock={handleSetCharacterLock}
-            styleReferenceIndex={styleReferenceIndex}
-            onToggleStyleReference={handleToggleStyleReference}
-          />
-          <div className="flex flex-col w-full h-full gap-8">
-            <ControlLayersManager 
-              controlLayers={controlLayers}
-              onLayersUpdate={handleLayersUpdate}
-              initialPose={poseKeypoints}
-              poseSourceImage={poseSourceImage}
-              onClearPose={() => {
-                setPoseKeypoints(null);
-                setPoseSourceImage(null);
-                setControlLayers(p => ({ ...p, pose: { ...p.pose, image: null } }));
-              }}
-            />
-            <PromptEditor 
-                prompt={prompt} 
-                onPromptChange={handlePromptChange} 
-                negativePrompt={negativePrompt}
-                onNegativePromptChange={handleNegativePromptChange}
-                templates={promptTemplates}
-                onSaveTemplate={handleSavePromptTemplate}
-                onDeleteTemplate={handleDeletePromptTemplate}
-                onUpdateTemplate={handleUpdatePromptTemplate}
-                uploadedImageCount={uploadedImageCount}
-                promptHistory={promptHistory}
-                onClearPromptHistory={handleClearPromptHistory}
-                useGoogleSearch={useGoogleSearch}
-                onUseGoogleSearchChange={setUseGoogleSearch}
-            />
-          </div>
+        <ModeSelector mode={currentMode} setMode={setCurrentMode} />
+
+        <div className="w-full max-w-7xl">
+            {currentMode === 'create' && (
+                <div className="flex justify-center">
+                    <div className="w-full" style={{ maxWidth: '422px' }}>
+                        <PromptEditor 
+                            prompt={prompt} 
+                            onPromptChange={handlePromptChange} 
+                            negativePrompt={negativePrompt}
+                            onNegativePromptChange={handleNegativePromptChange}
+                            templates={promptTemplates}
+                            onSaveTemplate={handleSavePromptTemplate}
+                            onDeleteTemplate={handleDeletePromptTemplate}
+                            onUpdateTemplate={handleUpdatePromptTemplate}
+                            uploadedImageCount={uploadedImageCount}
+                            promptHistory={promptHistory}
+                            onClearPromptHistory={handleClearPromptHistory}
+                            useGoogleSearch={useGoogleSearch}
+                            onUseGoogleSearchChange={setUseGoogleSearch}
+                            currentMode={currentMode}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {currentMode === 'img2img' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <ImageUploader 
+                        onImageUpload={handleImageUpload} 
+                        images={uploadedImages}
+                        cropAspectRatio={parseAspectRatio(aspectRatio)}
+                        onAnalyzePose={handleAnalyzePose}
+                        analyzingPoseIndex={isAnalyzingPose}
+                        onAnalyzeStyle={handleAnalyzeStyle}
+                        analyzingStyleIndex={isAnalyzingStyle}
+                        onGenerateControlMap={handleGenerateControlMap}
+                        generatingControlMapIndex={generatingControlMap}
+                        onUpscaleImage={handleUpscaleFromUploader}
+                        isBusy={isBusy}
+                        lockedCharacter={lockedCharacter}
+                        onSetCharacterLock={handleSetCharacterLock}
+                        styleReferenceIndex={styleReferenceIndex}
+                        onToggleStyleReference={handleToggleStyleReference}
+                        onStartEditing={handleStartEditing}
+                    />
+                    <PromptEditor 
+                        prompt={prompt} 
+                        onPromptChange={handlePromptChange} 
+                        negativePrompt={negativePrompt}
+                        onNegativePromptChange={handleNegativePromptChange}
+                        templates={promptTemplates}
+                        onSaveTemplate={handleSavePromptTemplate}
+                        onDeleteTemplate={handleDeletePromptTemplate}
+                        onUpdateTemplate={handleUpdatePromptTemplate}
+                        uploadedImageCount={uploadedImageCount}
+                        promptHistory={promptHistory}
+                        onClearPromptHistory={handleClearPromptHistory}
+                        useGoogleSearch={useGoogleSearch}
+                        onUseGoogleSearchChange={setUseGoogleSearch}
+                        currentMode={currentMode}
+                    />
+                </div>
+            )}
+            
+            {currentMode === 'control' && (
+                <div className="flex flex-col items-center gap-8">
+                    <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <ImageUploader 
+                            onImageUpload={handleImageUpload} 
+                            images={uploadedImages}
+                            cropAspectRatio={parseAspectRatio(aspectRatio)}
+                            onAnalyzePose={handleAnalyzePose}
+                            analyzingPoseIndex={isAnalyzingPose}
+                            onAnalyzeStyle={handleAnalyzeStyle}
+                            analyzingStyleIndex={isAnalyzingStyle}
+                            onGenerateControlMap={handleGenerateControlMap}
+                            generatingControlMapIndex={generatingControlMap}
+                            onUpscaleImage={handleUpscaleFromUploader}
+                            isBusy={isBusy}
+                            lockedCharacter={lockedCharacter}
+                            onSetCharacterLock={handleSetCharacterLock}
+                            styleReferenceIndex={styleReferenceIndex}
+                            onToggleStyleReference={handleToggleStyleReference}
+                            onStartEditing={handleStartEditing}
+                        />
+                        <ControlLayersManager 
+                            controlLayers={controlLayers}
+                            onLayersUpdate={handleLayersUpdate}
+                            initialPose={poseKeypoints}
+                            poseSourceImage={poseSourceImage}
+                            onClearPose={() => {
+                                setPoseKeypoints(null);
+                                setPoseSourceImage(null);
+                                setControlLayers(p => ({ ...p, pose: { ...p.pose, image: null } }));
+                            }}
+                        />
+                    </div>
+                    <div className="w-full" style={{ maxWidth: '422px' }}>
+                        <PromptEditor 
+                            prompt={prompt} 
+                            onPromptChange={handlePromptChange} 
+                            negativePrompt={negativePrompt}
+                            onNegativePromptChange={handleNegativePromptChange}
+                            templates={promptTemplates}
+                            onSaveTemplate={handleSavePromptTemplate}
+                            onDeleteTemplate={handleDeletePromptTemplate}
+                            onUpdateTemplate={handleUpdatePromptTemplate}
+                            uploadedImageCount={uploadedImageCount}
+                            promptHistory={promptHistory}
+                            onClearPromptHistory={handleClearPromptHistory}
+                            useGoogleSearch={useGoogleSearch}
+                            onUseGoogleSearchChange={setUseGoogleSearch}
+                            currentMode={currentMode}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
 
         <div className="my-6 text-center w-full max-w-5xl grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-2">
-                <h3 className="text-xl font-semibold text-white mb-3">3. 選擇長寬比</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">{currentSettingsStep}. 選擇長寬比</h3>
                 <div className="p-2 bg-slate-700 rounded-lg">
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                         {PREDEFINED_ASPECT_RATIOS.map(r => <AspectRatioButton key={r} value={r} label={r} />)}
@@ -667,7 +894,7 @@ const App: React.FC = () => {
                 </div>
             </div>
             <div>
-                <h3 className="text-xl font-semibold text-white mb-3">4. 生成數量</h3>
+                <h3 className="text-xl font-semibold text-white mb-3">{currentSettingsStep + 1}. 生成數量</h3>
                 <div className="grid grid-cols-4 gap-2 p-1 bg-slate-700 rounded-lg h-[68px] items-center">
                     {[1, 2, 3, 4].map(v => <button key={v} onClick={() => setNumberOfVariations(v)} className={`py-2 text-sm rounded-md ${numberOfVariations === v ? 'bg-sky-600' : 'hover:bg-slate-600'}`}>{v}</button>)}
                 </div>
@@ -682,7 +909,7 @@ const App: React.FC = () => {
         </div>
 
         <div className="w-full max-w-5xl p-4 bg-slate-700 rounded-lg mb-6">
-            <h3 className="text-xl font-semibold text-white mb-3 text-center">5. 隨機種子 (Seed)</h3>
+            <h3 className="text-xl font-semibold text-white mb-3 text-center">{currentSettingsStep + 2}. 隨機種子 (Seed)</h3>
             <div className="flex items-center justify-center gap-2">
                 <input type="text" value={seed} onChange={(e) => setSeed(e.target.value.replace(/\D/g, ''))} placeholder="隨機" className="w-full max-w-xs p-2 bg-slate-800 rounded-md text-center font-mono" />
                 <button onClick={() => setSeed(String(Math.floor(Math.random() * 999999999)))} title="隨機產生新種子" className="p-2 bg-slate-600 rounded-md hover:bg-slate-500">🎲</button>
@@ -700,7 +927,7 @@ const App: React.FC = () => {
                   {generateButtonText}
                 </button>
             </div>
-            <button onClick={() => setIsBatchModalOpen(true)} className="text-sm text-sky-400 hover:text-sky-300 underline transition-colors" disabled={!hasImages}>
+            <button onClick={() => setIsBatchModalOpen(true)} className="text-sm text-sky-400 hover:text-sky-300 underline transition-colors" disabled={!hasImages || currentMode === 'create'}>
                 啟動批次處理模式
             </button>
         </div>
@@ -716,6 +943,7 @@ const App: React.FC = () => {
         />
 
         <GeneratedResult
+          id="generated-result-section"
           results={results}
           isLoading={isLoading}
           loadingMessage={loadingMessage}
@@ -724,6 +952,7 @@ const App: React.FC = () => {
           onZoom={handleZoomImage}
           onStartEditing={handleStartEditing}
           isEditing={editingState.isActive}
+          onUpscale={handleUpscale}
         />
 
         {results.length > 0 && !isLoading && !error && numberOfVariations === 1 && (

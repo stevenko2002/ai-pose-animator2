@@ -4,6 +4,7 @@ import type { GenerationResult, GroundingChunk } from '../types';
 const generateRandomString = () => Math.random().toString(36).substring(2, 10);
 
 interface GeneratedResultProps {
+    id?: string;
     results: GenerationResult[];
     isLoading: boolean;
     loadingMessage: string;
@@ -11,6 +12,7 @@ interface GeneratedResultProps {
     onUseAsInput: (image: string, slotIndex: number) => void;
     onZoom: (image: string) => void;
     onStartEditing: (imageSrc: string) => void;
+    onUpscale: (image: string) => void;
     isEditing: boolean;
 }
 
@@ -57,8 +59,9 @@ const ResultCard: React.FC<{
     onUseAsInput: (image: string, slotIndex: number) => void;
     onZoom: (image: string) => void;
     onStartEditing: (imageSrc: string) => void;
+    onUpscale: (image: string) => void;
     isEditing: boolean;
-}> = ({ result, onUseAsInput, onZoom, onStartEditing, isEditing }) => {
+}> = ({ result, onUseAsInput, onZoom, onStartEditing, onUpscale, isEditing }) => {
     const [isUseAsInputOpen, setIsUseAsInputOpen] = useState(false);
     const { image, text, groundingChunks, seed } = result;
 
@@ -126,6 +129,13 @@ const ResultCard: React.FC<{
                 >
                     編輯畫布
                 </button>
+                 <button
+                    onClick={() => onUpscale(image)}
+                    className="px-4 py-2 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+                    disabled={isEditing}
+                >
+                    🚀 畫質提升
+                </button>
                 <button
                     onClick={() => downloadMedia(image, `generated_image_${generateRandomString()}.png`)}
                     className="px-4 py-2 text-sm bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
@@ -139,12 +149,12 @@ const ResultCard: React.FC<{
 };
 
 const GeneratedResult: React.FC<GeneratedResultProps> = ({ 
-    results, isLoading, loadingMessage, error, 
+    id, results, isLoading, loadingMessage, error, 
     onUseAsInput, onZoom,
-    onStartEditing, isEditing
+    onStartEditing, onUpscale, isEditing
 }) => {
     return (
-        <div className="w-full max-w-5xl mt-8 p-6 bg-slate-800 rounded-lg shadow-lg flex flex-col items-center justify-center min-h-[400px]">
+        <div id={id} className="w-full max-w-5xl mt-8 p-6 bg-slate-800 rounded-lg shadow-lg flex flex-col items-center justify-center min-h-[400px]">
             <h3 className="text-2xl font-bold text-white mb-4">生成結果</h3>
             <div className="w-full h-full flex items-center justify-center">
                 {isLoading ? (
@@ -168,6 +178,7 @@ const GeneratedResult: React.FC<GeneratedResultProps> = ({
                                 onUseAsInput={onUseAsInput} 
                                 onZoom={onZoom}
                                 onStartEditing={onStartEditing}
+                                onUpscale={onUpscale}
                                 isEditing={isEditing}
                             />
                         ))}

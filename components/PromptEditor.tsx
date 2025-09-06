@@ -16,6 +16,7 @@ interface PromptEditorProps {
   onClearPromptHistory: () => void;
   useGoogleSearch: boolean;
   onUseGoogleSearchChange: (enabled: boolean) => void;
+  currentMode: 'create' | 'img2img' | 'control';
 }
 
 const PromptEditor: React.FC<PromptEditorProps> = ({ 
@@ -24,7 +25,8 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
     templates, onSaveTemplate, onDeleteTemplate, onUpdateTemplate,
     uploadedImageCount,
     promptHistory, onClearPromptHistory,
-    useGoogleSearch, onUseGoogleSearchChange
+    useGoogleSearch, onUseGoogleSearchChange,
+    currentMode
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
@@ -121,11 +123,31 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
 
   const isActionDisabled = !prompt || prompt.trim().length === 0;
 
-  const isCreateMode = uploadedImageCount === 0;
-  const title = isCreateMode ? "2. 描述要創造的圖片" : "2. 描述你的編輯";
-  const placeholderText = isCreateMode
-    ? "例如：一頭戴著皇冠的雄偉獅子，寫實風格..."
-    : "例如：將圖片 1 的人物放到圖片 2 的沙灘上，或給圖片 1 的人物戴上一頂紅帽子...";
+  const getTitleAndPlaceholder = () => {
+    switch (currentMode) {
+      case 'create':
+        return {
+          title: "1. 描述要創造的圖片",
+          placeholder: "例如：一頭戴著皇冠的雄偉獅子，寫實風格...",
+        };
+      case 'img2img':
+        return {
+          title: "2. 描述你的編輯",
+          placeholder: "例如：將圖片 1 的人物放到圖片 2 的沙灘上，或給圖片 1 的人物戴上一頂紅帽子...",
+        };
+      case 'control':
+        return {
+          title: "3. 描述你的編輯",
+          placeholder: "例如：將圖片 1 的人物放到圖片 2 的沙灘上，或給圖片 1 的人物戴上一頂紅帽子...",
+        };
+      default:
+        return { title: '2. 描述', placeholder: '' };
+    }
+  };
+
+  // FIX: The returned object from getTitleAndPlaceholder has a 'placeholder' property, not 'placeholderText'.
+  // Alias 'placeholder' to 'placeholderText' to match its usage below.
+  const { title, placeholder: placeholderText } = getTitleAndPlaceholder();
 
   return (
     <div className="flex flex-col items-center justify-start w-full h-full p-4 bg-slate-800 rounded-lg shadow-lg">

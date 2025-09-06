@@ -19,10 +19,13 @@ interface ImageUploaderProps {
   analyzingStyleIndex: number | null;
   onGenerateControlMap: (index: number, type: 'canny' | 'depth') => void;
   generatingControlMapIndex: { index: number; type: 'canny' | 'depth' } | null;
+  onUpscaleImage: (image: string) => void;
+  isBusy: boolean;
   lockedCharacter: CharacterLock | null;
   onSetCharacterLock: (index: number, lock: { appearance: boolean; clothing: boolean; }) => void;
   styleReferenceIndex: number | null;
   onToggleStyleReference: (index: number) => void;
+  onStartEditing: (imageSrc: string) => void;
 }
 
 const ImageUploader: React.FC<ImageUploaderProps> = ({ 
@@ -30,8 +33,10 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     onAnalyzePose, analyzingPoseIndex,
     onAnalyzeStyle, analyzingStyleIndex,
     onGenerateControlMap, generatingControlMapIndex,
+    onUpscaleImage, isBusy: isAppBusy,
     lockedCharacter, onSetCharacterLock,
-    styleReferenceIndex, onToggleStyleReference
+    styleReferenceIndex, onToggleStyleReference,
+    onStartEditing
 }) => {
   const [images, setImages] = useState<(string | null)[]>(imagesProp);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -162,7 +167,8 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     const isAnalyzingStyle = analyzingStyleIndex === index;
     const isGeneratingControlMap = generatingControlMapIndex?.index === index;
     const controlMapType = generatingControlMapIndex?.type;
-    const isBusy = isAnalyzingPose || isAnalyzingStyle || isGeneratingControlMap;
+    const isLocalBusy = isAnalyzingPose || isAnalyzingStyle || isGeneratingControlMap;
+    const isBusy = isAppBusy || isLocalBusy;
     
     const characterLock = lockedCharacter?.index === index ? lockedCharacter : null;
     const isCharacterLocked = !!characterLock;
@@ -209,7 +215,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
               <div className={`absolute ${lockBadgeText ? 'top-10' : 'top-2'} right-2 bg-teal-600 text-white text-xs font-bold px-2 py-1 rounded-md z-10`}>風格參考</div>
           )}
           {imagePreview ? (
-            <img src={imagePreview} alt={`Preview ${index + 1}`} className={`w-full h-full object-contain transition-opacity ${isBusy ? 'opacity-30' : 'opacity-100'}`} />
+            <img src={imagePreview} alt={`Preview ${index + 1}`} className={`w-full h-full object-contain transition-opacity ${isLocalBusy ? 'opacity-30' : 'opacity-100'}`} />
           ) : (
             <div className="text-center text-slate-400 p-4 pointer-events-none">
                 {isDraggingOver ? (
@@ -225,7 +231,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                 )}
             </div>
           )}
-          {isBusy && (
+          {isLocalBusy && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-sky-400"></div>
                   <p className="text-white mt-2 text-sm">{busyMessage()}</p>
@@ -267,6 +273,12 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                   </button>
                   <button onClick={() => onGenerateControlMap(index, 'depth')} className="px-4 py-1.5 text-sm bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50" disabled={isBusy}>
                       生成深度圖
+                  </button>
+                  <button onClick={() => onStartEditing(imagePreview)} className="px-4 py-1.5 text-sm bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50" disabled={isBusy}>
+                      編輯畫布
+                  </button>
+                  <button onClick={() => onUpscaleImage(imagePreview)} className="px-4 py-1.5 text-sm bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50" disabled={isBusy}>
+                      🚀 畫質提升
                   </button>
                   <button onClick={() => handleCropClick(index)} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50" disabled={isBusy}>
                       裁剪
