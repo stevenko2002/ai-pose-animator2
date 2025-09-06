@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import type { GenerationResult, Pose } from '../types';
+import type { GenerationResult, Pose, ChatMessage, ControlLayers, ControlLayerData } from '../types';
 
 interface CharacterLock {
   index: number;
@@ -37,11 +36,15 @@ const parseImageGenerationResponse = (response: any): GenerationResult => {
         }
     }
     
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+    
     if (!generatedImage) {
         throw new Error("The API did not return an image. It might have refused the request. " + (generatedText || ""));
     }
 
-    return { image: generatedImage, text: generatedText };
+    // Note: gemini-2.5-flash-image-preview doesn't return the seed in its response.
+    // The seed is managed client-side and passed back with the result.
+    return { image: generatedImage, text: generatedText, groundingChunks };
 };
 
 const createCharacterLockPrompt = (lockedCharacter: CharacterLock | null): string => {
@@ -66,6 +69,8 @@ export const generateImageFromPrompt = async (
   negativePrompt: string,
   aspectRatio: string,
   numberOfImages: number,
+  useGoogleSearch: boolean,
+  seed: number | null,
 ): Promise<GenerationResult[]> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set. Please ensure it is configured.");
@@ -74,29 +79,51 @@ export const generateImageFromPrompt = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   try {
-    const response = await ai.models.generateImages({
-        model: 'imagen-4.0-generate-001',
-        prompt: prompt,
-        config: {
-          numberOfImages: numberOfImages,
-          outputMimeType: 'image/png',
-          aspectRatio: aspectRatio,
-          negativePrompt: negativePrompt || undefined,
-        },
-    });
+    if (useGoogleSearch) {
+        const text = `Generate an image with a strict ${aspectRatio} aspect ratio. The prompt is: "${prompt}".` + (negativePrompt ? `\n\nIMPORTANT: Strictly avoid generating any of the following elements: "${negativePrompt}".` : '');
+        const textPart = { text };
+        
+        const generationPromises = Array.from({ length: numberOfImages }).map(() =>
+            ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts: [textPart] },
+                config: {
+                    responseModalities: [Modality.IMAGE, Modality.TEXT],
+                    tools: [{ googleSearch: {} }],
+                    ...(seed !== null && { seed: seed }),
+                },
+            }).then(response => ({ ...parseImageGenerationResponse(response), seed }))
+        );
 
-    if (!response.generatedImages || response.generatedImages.length === 0) {
-        throw new Error("The API did not return an image.");
+        return await Promise.all(generationPromises);
+
+    } else {
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+              numberOfImages: numberOfImages,
+              outputMimeType: 'image/png',
+              aspectRatio: aspectRatio,
+              negativePrompt: negativePrompt || undefined,
+              ...(seed !== null && { seed: seed }),
+            },
+        });
+
+        if (!response.generatedImages || response.generatedImages.length === 0) {
+            throw new Error("The API did not return an image.");
+        }
+
+        return response.generatedImages.map(generatedImage => {
+          if (!generatedImage.image?.imageBytes) {
+              throw new Error("API response contained an image object without image data.");
+          }
+          const base64ImageBytes: string = generatedImage.image.imageBytes;
+          const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
+          // `generateImages` returns the seed it used
+          return { image: imageUrl, text: null, groundingChunks: [], seed: (generatedImage as any).seed };
+        });
     }
-
-    return response.generatedImages.map(generatedImage => {
-      if (!generatedImage.image?.imageBytes) {
-          throw new Error("API response contained an image object without image data.");
-      }
-      const base64ImageBytes: string = generatedImage.image.imageBytes;
-      const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
-      return { image: imageUrl, text: null };
-    });
 
   } catch (error) {
     console.error("Error generating image from prompt with Gemini:", error);
@@ -107,91 +134,93 @@ export const generateImageFromPrompt = async (
   }
 };
 
-export const generateImageFromPose = async (
+export const generateImageWithControls = async (
   baseImages: string[],
-  poseImage: string,
+  prompt: string,
   negativePrompt: string,
+  controlLayers: ControlLayers,
   aspectRatio: string,
   numberOfVariations: number,
   lockedCharacter: CharacterLock | null,
   styleReferenceIndex: number | null,
   styleStrength: number,
+  useGoogleSearch: boolean,
+  seed: number | null,
 ): Promise<GenerationResult[]> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set. Please ensure it is configured.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const baseImageParts = baseImages.map(fileToGenerativePart);
-  const poseImagePart = fileToGenerativePart(poseImage);
-
-  let text = `Your primary task is to generate an image with a final canvas that has a strict ${aspectRatio} aspect ratio. A 16:9 ratio is a wide landscape, and 9:16 is a tall portrait. 
-    
-To achieve this ${aspectRatio} canvas, you MUST perform outpainting: intelligently expand the scene and background from the input images to fill the entire frame. Do not crop, stretch, distort, or add black bars (letterboxing). The content must naturally fill the entire canvas.
-
-Within this ${aspectRatio} canvas, the subjects from the input images must be performing the exact pose shown in the stick figure drawing. Preserve the subjects' appearance, clothing, and the original background style as much as possible. The main change should be the pose, adapted to fit the new ${aspectRatio} frame.`;
-
-  text += createCharacterLockPrompt(lockedCharacter);
-
-  if (styleReferenceIndex !== null) {
-      text += `\n\n風格參考：請以 ${styleStrength}% 的強度嚴格遵循圖片 ${styleReferenceIndex + 1} 的藝術風格、色彩搭配和整體氛圍來生成最終圖片。`;
-  }
-  if (negativePrompt) {
-    text += `\n\nIMPORTANT: Strictly avoid generating any of the following elements: "${negativePrompt}".`;
-  }
-  const textPart = { text };
-
-  try {
-    const generationPromises = Array.from({ length: numberOfVariations }).map(() =>
-        ai.models.generateContent({
-            model: 'gemini-2.5-flash-image-preview',
-            contents: {
-                parts: [...baseImageParts, poseImagePart, textPart],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            },
-        }).then(parseImageGenerationResponse)
-    );
-
-    const results = await Promise.all(generationPromises);
-    return results;
-
-  } catch (error) {
-    console.error("Error generating image with Gemini:", error);
-    if (error instanceof Error) {
-        throw new Error(`Failed to generate image: ${error.message}`);
+    if (!process.env.API_KEY) {
+        throw new Error("API_KEY environment variable not set. Please ensure it is configured.");
     }
-    throw new Error("An unknown error occurred while generating the image.");
-  }
-};
-
-const createEditingTextPart = (
-    prompt: string, 
-    negativePrompt: string, 
-    aspectRatio: string,
-    lockedCharacter: CharacterLock | null,
-    styleReferenceIndex: number | null,
-    styleStrength: number,
-) => {
-    let text = `Your primary task is to generate an image with a final canvas that has a strict ${aspectRatio} aspect ratio. A 16:9 ratio is a wide landscape, and 9:16 is a tall portrait. 
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-To achieve this ${aspectRatio} canvas, you MUST perform outpainting: intelligently expand the scene and background from the input images to fill the entire frame. Do not crop, stretch, distort, or add black bars (letterboxing). The content must naturally fill the entire canvas.
+    const parts: any[] = baseImages.map(fileToGenerativePart);
+    const controlPrompts: string[] = [];
+    
+    const addControlPrompt = (data: ControlLayerData, description: string) => {
+        if (data.image) {
+            parts.push(fileToGenerativePart(data.image));
+            const weight = data.weight;
+            let strengthAdverb = '';
+            if (weight < 50) strengthAdverb = 'loosely reference';
+            else if (weight < 90) strengthAdverb = 'generally follow';
+            else if (weight <= 110) strengthAdverb = 'strictly follow';
+            else if (weight <= 150) strengthAdverb = 'very strictly follow with high precision';
+            else strengthAdverb = 'follow with extreme, absolute, pixel-level precision';
 
-Within this ${aspectRatio} canvas, apply the following instruction to the input images: "${prompt}".`;
+            controlPrompts.push(`- **${description} (Strength: ${weight}%)**: You MUST ${strengthAdverb} the provided "${description}" map.`);
+        }
+    };
 
+    addControlPrompt(controlLayers.pose, 'Pose Guidance');
+    addControlPrompt(controlLayers.canny, 'Canny Edge Map');
+    addControlPrompt(controlLayers.depth, 'Depth Map');
+    addControlPrompt(controlLayers.scribble, 'Scribble Guide');
+
+    let text = `You are an expert image editor. Your primary task is to generate a new image that perfectly matches the provided ${aspectRatio} aspect ratio.
+
+You MUST follow all provided control maps according to their specified strengths:
+${controlPrompts.join("\n")}
+
+Apply the following creative prompt to this structure: "${prompt}".`;
+    
     text += createCharacterLockPrompt(lockedCharacter);
 
     if (styleReferenceIndex !== null) {
         text += `\n\n風格參考：請以 ${styleStrength}% 的強度嚴格遵循圖片 ${styleReferenceIndex + 1} 的藝術風格、色彩搭配和整體氛圍來生成最終圖片。`;
     }
+
     if (negativePrompt) {
         text += `\n\nIMPORTANT: Strictly avoid generating any of the following elements: "${negativePrompt}".`;
     }
-    
-    return { text };
+
+    parts.push({ text });
+
+    const genConfig: any = {
+        responseModalities: [Modality.IMAGE, Modality.TEXT],
+        ...(seed !== null && { seed: seed }),
+    };
+    if (useGoogleSearch) {
+        genConfig.tools = [{googleSearch: {}}];
+    }
+
+    try {
+        const generationPromises = Array.from({ length: numberOfVariations }).map(() =>
+            ai.models.generateContent({
+                model: 'gemini-2.5-flash-image-preview',
+                contents: { parts },
+                config: genConfig,
+            }).then(response => ({ ...parseImageGenerationResponse(response), seed }))
+        );
+        const results = await Promise.all(generationPromises);
+        return results;
+    } catch (error) {
+        console.error("Error generating image with controls:", error);
+        if (error instanceof Error) {
+            throw new Error(`Failed to generate image with controls: ${error.message}`);
+        }
+        throw new Error("An unknown error occurred while generating image with controls.");
+    }
 };
+
 
 export const editImageWithPrompt = async (
   baseImages: string[],
@@ -202,6 +231,8 @@ export const editImageWithPrompt = async (
   lockedCharacter: CharacterLock | null,
   styleReferenceIndex: number | null,
   styleStrength: number,
+  useGoogleSearch: boolean,
+  seed: number | null,
 ): Promise<GenerationResult[]> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set. Please ensure it is configured.");
@@ -210,8 +241,27 @@ export const editImageWithPrompt = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const baseImageParts = baseImages.map(fileToGenerativePart);
-  const textPart = createEditingTextPart(prompt, negativePrompt, aspectRatio, lockedCharacter, styleReferenceIndex, styleStrength);
+  
+  let text = `Your primary task is to generate an image with a final canvas that has a strict ${aspectRatio} aspect ratio.
+Within this ${aspectRatio} canvas, apply the following instruction to the input images: "${prompt}".`;
 
+  text += createCharacterLockPrompt(lockedCharacter);
+
+  if (styleReferenceIndex !== null) {
+      text += `\n\n風格參考：請以 ${styleStrength}% 的強度嚴格遵循圖片 ${styleReferenceIndex + 1} 的藝術風格、色彩搭配和整體氛圍來生成最終圖片。`;
+  }
+  if (negativePrompt) {
+      text += `\n\nIMPORTANT: Strictly avoid generating any of the following elements: "${negativePrompt}".`;
+  }
+  const textPart = { text };
+
+  const genConfig: any = {
+      responseModalities: [Modality.IMAGE, Modality.TEXT],
+      ...(seed !== null && { seed: seed }),
+  };
+  if (useGoogleSearch) {
+      genConfig.tools = [{googleSearch: {}}];
+  }
 
   try {
     const generationPromises = Array.from({ length: numberOfVariations }).map(() =>
@@ -220,16 +270,15 @@ export const editImageWithPrompt = async (
             contents: {
                 parts: [...baseImageParts, textPart],
             },
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            },
-        }).then(parseImageGenerationResponse)
+            config: genConfig,
+        }).then(response => ({ ...parseImageGenerationResponse(response), seed }))
     );
 
     const results = await Promise.all(generationPromises);
     return results;
 
-  } catch (error) {
+  } catch (error)
+ {
     console.error("Error editing image with Gemini:", error);
     if (error instanceof Error) {
         throw new Error(`Failed to edit image: ${error.message}`);
@@ -248,6 +297,8 @@ export const editImageWithMask = async (
   lockedCharacter: CharacterLock | null,
   styleReferenceIndex: number | null,
   styleStrength: number,
+  useGoogleSearch: boolean,
+  seed: number | null,
 ): Promise<GenerationResult[]> => {
   if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set. Please ensure it is configured.");
@@ -258,13 +309,13 @@ export const editImageWithMask = async (
   const baseImagePart = fileToGenerativePart(baseImage);
   const maskImagePart = fileToGenerativePart(maskImage);
 
-  let text = `You are an expert image editor performing an inpainting task. You will be given three inputs: a source image, a mask image, and a text prompt.
+  let text = `You are an expert image editor performing an inpainting/outpainting task. You will be given three inputs: a source image (which may have transparent areas), a mask image, and a text prompt.
 
-Your task is to modify the source image *only* in the areas designated by the mask. The mask is a black and white image; you must edit the source image where the mask is WHITE and leave the areas where the mask is BLACK completely unchanged.
+Your task is to generate new content *only* in the areas designated by the mask. The mask is a black and white image; you must generate content where the mask is WHITE and leave the areas where the mask is BLACK completely unchanged. The source image provides context for the black areas.
 
 The edits you make should be based on this instruction: "${prompt}".
 
-The final output image must have a strict ${aspectRatio} aspect ratio. To achieve this, you may need to perform outpainting to expand the scene and background naturally to fill the entire frame without distortion or letterboxing. The inpainting edit should be seamlessly blended into the potentially expanded canvas.
+The final output image must have a strict ${aspectRatio} aspect ratio. The generated content should be seamlessly blended into the source image's context.
 `;
   text += createCharacterLockPrompt(lockedCharacter);
   
@@ -275,6 +326,14 @@ The final output image must have a strict ${aspectRatio} aspect ratio. To achiev
     text += `\nIMPORTANT: When generating the new content, strictly avoid including any of the following: "${negativePrompt}".`;
   }
   const textPart = { text };
+  
+  const genConfig: any = {
+      responseModalities: [Modality.IMAGE, Modality.TEXT],
+      ...(seed !== null && { seed: seed }),
+  };
+  if (useGoogleSearch) {
+      genConfig.tools = [{googleSearch: {}}];
+  }
 
   try {
     const generationPromises = Array.from({ length: numberOfVariations }).map(() =>
@@ -283,10 +342,8 @@ The final output image must have a strict ${aspectRatio} aspect ratio. To achiev
             contents: {
                 parts: [baseImagePart, maskImagePart, textPart],
             },
-            config: {
-                responseModalities: [Modality.IMAGE, Modality.TEXT],
-            },
-        }).then(parseImageGenerationResponse)
+            config: genConfig,
+        }).then(response => ({ ...parseImageGenerationResponse(response), seed }))
     );
 
     const results = await Promise.all(generationPromises);
@@ -301,6 +358,78 @@ The final output image must have a strict ${aspectRatio} aspect ratio. To achiev
   }
 };
 
+export const editImageWithChat = async (
+  history: ChatMessage[],
+  newPrompt: string,
+  negativePrompt: string,
+  aspectRatio: string,
+  lockedCharacter: CharacterLock | null,
+  styleReferenceIndex: number | null,
+  styleStrength: number,
+  useGoogleSearch: boolean,
+  seed: number | null,
+): Promise<GenerationResult> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set.");
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const parts: any[] = [];
+  
+  // Construct the history parts
+  for (const message of history) {
+    const messageParts = [];
+    if (message.image) {
+      messageParts.push(fileToGenerativePart(message.image));
+    }
+    if (message.text) {
+      messageParts.push({ text: message.text });
+    }
+    parts.push(...messageParts);
+  }
+  
+  let instructionText = `Apply this new instruction to the last image, considering the conversation context: "${newPrompt}".
+The final output image must have a strict ${aspectRatio} aspect ratio. The edit should be seamlessly blended into the canvas.
+`;
+  instructionText += createCharacterLockPrompt(lockedCharacter);
+
+  if (styleReferenceIndex !== null) {
+      instructionText += `\n\n風格參考：請以 ${styleStrength}% 的強度嚴格遵循圖片 ${styleReferenceIndex + 1} 的藝術風格、色彩搭配和整體氛圍來生成最終圖片。`;
+  }
+  if (negativePrompt) {
+      instructionText += `\n\nIMPORTANT: Strictly avoid generating any of the following elements: "${negativePrompt}".`;
+  }
+
+  parts.push({ text: instructionText });
+
+  const genConfig: any = {
+      responseModalities: [Modality.IMAGE, Modality.TEXT],
+      ...(seed !== null && { seed: seed }),
+  };
+  if (useGoogleSearch) {
+      genConfig.tools = [{googleSearch: {}}];
+  }
+
+  try {
+      const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash-image-preview',
+          contents: { parts },
+          config: genConfig,
+      });
+      return { ...parseImageGenerationResponse(response), seed };
+  } catch (error) {
+      console.error("Error editing image with chat:", error);
+      if (error instanceof Error) {
+          throw new Error(`Failed to edit image with chat: ${error.message}`);
+      }
+      throw new Error("An unknown error occurred while editing the image with chat.");
+  }
+};
+
+// This function is deprecated and its functionality is now inside editImageWithMask
+export const expandImage = async (): Promise<GenerationResult> => {
+  throw new Error("expandImage is deprecated. Use editImageWithMask for outpainting.");
+};
 
 export const optimizePrompt = async (
   originalPrompt: string,
@@ -383,6 +512,50 @@ export const generateInspiration = async (
   }
 };
 
+export const analyzeStyle = async (base64Image: string): Promise<string> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const imagePart = fileToGenerativePart(base64Image);
+
+  const systemInstruction = `You are a world-class art critic and AI prompt engineer. Your task is to analyze an image and generate a highly descriptive, vivid, and detailed text prompt that would allow an AI image generator to recreate its style.
+
+Focus on:
+- **Artistic Style:** (e.g., photorealistic, impressionistic, anime, cartoon, 3D render, watercolor)
+- **Medium:** (e.g., oil painting, digital painting, photograph, pencil sketch)
+- **Lighting:** (e.g., cinematic lighting, soft studio lighting, dramatic backlighting, golden hour)
+- **Color Palette:** (e.g., vibrant and saturated, muted and desaturated, pastel colors, monochrome)
+- **Composition:** (e.g., centered, rule of thirds, wide shot, close-up)
+- **Mood/Atmosphere:** (e.g., epic, serene, mysterious, cheerful, cyberpunk)
+- **Key Details & Textures:** (e.g., hyperdetailed, intricate patterns, sharp focus, lens flare, film grain)
+
+Output ONLY the prompt text in Chinese, as a series of descriptive keywords and phrases separated by commas. Do not add any extra explanations, greetings, or markdown formatting.`;
+
+  try {
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, {text: "Analyze this image and generate a prompt for its style."}] },
+        config: { systemInstruction },
+    });
+    
+    const styleText = response.text;
+    if (!styleText || styleText.trim() === '') {
+      throw new Error("The API did not return a style analysis.");
+    }
+    return styleText.trim();
+
+  } catch (error) {
+    console.error("Error analyzing style:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to analyze style: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while analyzing style.");
+  }
+};
+
+
 const POSE_KEYPOINTS = [
   "nose", "left_eye", "right_eye", "left_ear", "right_ear",
   "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
@@ -464,5 +637,57 @@ export const analyzePose = async (base64Image: string): Promise<Pose> => {
         throw new Error(`Failed to analyze pose: ${error.message}`);
     }
     throw new Error("An unknown error occurred while analyzing the pose.");
+  }
+};
+
+export const generateCannyEdgeMap = async (base64Image: string): Promise<GenerationResult> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set.");
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const imagePart = fileToGenerativePart(base64Image);
+  const textPart = { text: "IDENTITY: You are a non-creative computer vision service. TASK: Perform edge detection. INPUT: An image. OUTPUT: A binary image of the same dimensions. STRICT RULES: 1. Background MUST be pure black (#000000). 2. Detected edges MUST be pure white (#FFFFFF), single-pixel thin lines. 3. There must be ZERO gray pixels, anti-aliasing, colors, or textures. 4. NO part of the original image should be present in the output. Execute this data transformation precisely." };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image-preview',
+      contents: { parts: [imagePart, textPart] },
+      config: {
+          responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    });
+    return parseImageGenerationResponse(response);
+  } catch (error) {
+    console.error("Error generating canny edge map:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to generate canny edge map: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while generating the canny edge map.");
+  }
+};
+
+export const generateDepthMap = async (base64Image: string): Promise<GenerationResult> => {
+  if (!process.env.API_KEY) {
+    throw new Error("API_KEY environment variable not set.");
+  }
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const imagePart = fileToGenerativePart(base64Image);
+  const textPart = { text: "IDENTITY: You are a non-creative computer vision service. TASK: Perform depth estimation. INPUT: An image. OUTPUT: A grayscale depth map of the same dimensions. STRICT RULES: 1. The output MUST be a grayscale image only. 2. Lighter values (approaching pure white #FFFFFF) represent objects closer to the camera. 3. Darker values (approaching pure black #000000) represent objects further away. 4. The output must be a smooth, clean gradient representing spatial depth. 5. DO NOT include any color, patterns, or textures from the original input image. Execute this data transformation precisely." };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image-preview',
+      contents: { parts: [imagePart, textPart] },
+      config: {
+          responseModalities: [Modality.IMAGE, Modality.TEXT],
+      },
+    });
+    return parseImageGenerationResponse(response);
+  } catch (error) {
+    console.error("Error generating depth map:", error);
+    if (error instanceof Error) {
+        throw new Error(`Failed to generate depth map: ${error.message}`);
+    }
+    throw new Error("An unknown error occurred while generating the depth map.");
   }
 };

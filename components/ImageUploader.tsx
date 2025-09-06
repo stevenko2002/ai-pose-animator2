@@ -14,9 +14,11 @@ interface ImageUploaderProps {
   images: (string | null)[];
   cropAspectRatio: number | undefined;
   onAnalyzePose: (image: string) => void;
-  analyzingIndex: number | null;
-  onStartMasking: (image: string, index: number) => void;
-  maskingImageIndex: number | null;
+  analyzingPoseIndex: number | null;
+  onAnalyzeStyle: (index: number) => void;
+  analyzingStyleIndex: number | null;
+  onGenerateControlMap: (index: number, type: 'canny' | 'depth') => void;
+  generatingControlMapIndex: { index: number; type: 'canny' | 'depth' } | null;
   lockedCharacter: CharacterLock | null;
   onSetCharacterLock: (index: number, lock: { appearance: boolean; clothing: boolean; }) => void;
   styleReferenceIndex: number | null;
@@ -25,8 +27,9 @@ interface ImageUploaderProps {
 
 const ImageUploader: React.FC<ImageUploaderProps> = ({ 
     onImageUpload, images: imagesProp, cropAspectRatio, 
-    onAnalyzePose, analyzingIndex,
-    onStartMasking, maskingImageIndex,
+    onAnalyzePose, analyzingPoseIndex,
+    onAnalyzeStyle, analyzingStyleIndex,
+    onGenerateControlMap, generatingControlMapIndex,
     lockedCharacter, onSetCharacterLock,
     styleReferenceIndex, onToggleStyleReference
 }) => {
@@ -132,18 +135,15 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
     }
   };
   
-  const handleAnalyzeClick = (index: number) => {
+  const handleAnalyzePoseClick = (index: number) => {
     const imageSrc = images[index];
     if (imageSrc) {
         onAnalyzePose(imageSrc);
     }
   }
   
-  const handleStartMaskingClick = (index: number) => {
-      const imageSrc = images[index];
-      if(imageSrc) {
-          onStartMasking(imageSrc, index);
-      }
+  const handleAnalyzeStyleClick = (index: number) => {
+      onAnalyzeStyle(index);
   }
 
   const handleCropComplete = (croppedImageUrl: string) => {
@@ -158,9 +158,11 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
   const UploadSlot = ({ index }: { index: number }) => {
     const imagePreview = images[index];
     const isDraggingOver = draggingIndex === index;
-    const isAnalyzing = analyzingIndex === index;
-    const isMasking = maskingImageIndex === index;
-    const isBusy = isAnalyzing || isMasking;
+    const isAnalyzingPose = analyzingPoseIndex === index;
+    const isAnalyzingStyle = analyzingStyleIndex === index;
+    const isGeneratingControlMap = generatingControlMapIndex?.index === index;
+    const controlMapType = generatingControlMapIndex?.type;
+    const isBusy = isAnalyzingPose || isAnalyzingStyle || isGeneratingControlMap;
     
     const characterLock = lockedCharacter?.index === index ? lockedCharacter : null;
     const isCharacterLocked = !!characterLock;
@@ -179,6 +181,15 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
         onSetCharacterLock(index, lock);
         setActiveLockMenu(null);
     }
+
+    const busyMessage = () => {
+        if (isAnalyzingPose) return '分析姿勢中...';
+        if (isAnalyzingStyle) return '分析風格中...';
+        if (isGeneratingControlMap) {
+            return controlMapType === 'canny' ? '生成線條稿中...' : '生成深度圖中...';
+        }
+        return '';
+    };
 
     return (
       <div className="w-full flex flex-col items-center">
@@ -217,9 +228,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
           {isBusy && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-sky-400"></div>
-                  <p className="text-white mt-2 text-sm">
-                    {isAnalyzing ? '分析姿勢中...' : isMasking ? '建立遮罩中...' : ''}
-                  </p>
+                  <p className="text-white mt-2 text-sm">{busyMessage()}</p>
               </div>
           )}
         </div>
@@ -247,14 +256,18 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({
                   <button onClick={() => onToggleStyleReference(index)} className={`px-4 py-1.5 text-sm ${isStyleReferenced ? 'bg-teal-800' : 'bg-teal-600'} text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50`} disabled={isBusy}>
                       {isStyleReferenced ? '取消參考' : '參考風格'}
                   </button>
-                  <button onClick={() => handleAnalyzeClick(index)} className="px-4 py-1.5 text-sm bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50" disabled={isBusy}>
+                  <button onClick={() => handleAnalyzePoseClick(index)} className="px-4 py-1.5 text-sm bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50" disabled={isBusy}>
                       分析姿勢
                   </button>
-                  {index === 0 && (
-                      <button onClick={() => handleStartMaskingClick(index)} className="px-4 py-1.5 text-sm bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition-colors disabled:opacity-50" disabled={isBusy}>
-                          遮罩編輯
-                      </button>
-                  )}
+                  <button onClick={() => handleAnalyzeStyleClick(index)} className="px-4 py-1.5 text-sm bg-pink-600 text-white font-semibold rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50" disabled={isBusy}>
+                      分析風格
+                  </button>
+                  <button onClick={() => onGenerateControlMap(index, 'canny')} className="px-4 py-1.5 text-sm bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50" disabled={isBusy}>
+                      生成線條稿
+                  </button>
+                  <button onClick={() => onGenerateControlMap(index, 'depth')} className="px-4 py-1.5 text-sm bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50" disabled={isBusy}>
+                      生成深度圖
+                  </button>
                   <button onClick={() => handleCropClick(index)} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50" disabled={isBusy}>
                       裁剪
                   </button>

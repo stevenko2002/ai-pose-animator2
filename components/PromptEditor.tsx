@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { optimizePrompt, generateInspiration } from '../services/geminiService';
+import { stylePresets } from '../styles/presets';
 
 interface PromptEditorProps {
   prompt: string;
@@ -13,6 +14,8 @@ interface PromptEditorProps {
   uploadedImageCount: number;
   promptHistory: string[];
   onClearPromptHistory: () => void;
+  useGoogleSearch: boolean;
+  onUseGoogleSearchChange: (enabled: boolean) => void;
 }
 
 const PromptEditor: React.FC<PromptEditorProps> = ({ 
@@ -20,7 +23,8 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
     negativePrompt, onNegativePromptChange,
     templates, onSaveTemplate, onDeleteTemplate, onUpdateTemplate,
     uploadedImageCount,
-    promptHistory, onClearPromptHistory
+    promptHistory, onClearPromptHistory,
+    useGoogleSearch, onUseGoogleSearchChange
 }) => {
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [optimizeError, setOptimizeError] = useState<string | null>(null);
@@ -57,6 +61,18 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
     onPromptChange(event.target.value);
     if(optimizeError) setOptimizeError(null);
     if(inspireError) setInspireError(null);
+  };
+  
+  const handlePresetClick = (presetPrompt: string) => {
+    // FIX: The onPromptChange prop is typed to accept a string, but was being passed a function.
+    // The implementation now correctly uses the `prompt` prop to build the new prompt string.
+    const trimmedPrev = prompt.trim();
+    const newPrompt = !trimmedPrev
+      ? presetPrompt
+      : trimmedPrev.endsWith(',')
+      ? `${trimmedPrev} ${presetPrompt}`
+      : `${trimmedPrev}, ${presetPrompt}`;
+    onPromptChange(newPrompt);
   };
 
   const handleClear = () => {
@@ -239,25 +255,61 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
             </div>
         )}
       </div>
-
-      <textarea
-        value={prompt}
-        onChange={handlePromptChange}
-        placeholder={placeholderText}
-        className="w-full max-w-[350px] p-4 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[140px]"
-        aria-label="圖片編輯提示詞"
-      />
-      <div className="w-full max-w-[350px] mt-3">
-        <label htmlFor="negative-prompt" className="text-sm font-medium text-slate-400 mb-1 block">負面提示詞 (選填)</label>
+      
+      <div className="w-full max-w-[350px] space-y-2">
         <textarea
-          id="negative-prompt"
-          value={negativePrompt}
-          onChange={(e) => onNegativePromptChange(e.target.value)}
-          placeholder="需要避免的內容... 例如：文字、浮水印、模糊"
-          className="w-full p-2 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[60px]"
-          aria-label="圖片生成負面提示詞"
+          value={prompt}
+          onChange={handlePromptChange}
+          placeholder={placeholderText}
+          className="w-full p-3 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[100px]"
+          aria-label="圖片編輯提示詞"
         />
+        <div className="w-full">
+            <details className="bg-slate-900/50 rounded-lg">
+                <summary className="cursor-pointer p-2 text-sm text-slate-400 hover:text-white transition-colors">風格預設庫</summary>
+                <div className="p-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {stylePresets.map(preset => (
+                        <button
+                            key={preset.name}
+                            onClick={() => handlePresetClick(preset.prompt)}
+                            title={preset.prompt}
+                            className="w-full p-2 text-xs bg-slate-700 text-slate-300 rounded-md hover:bg-sky-600 hover:text-white transition-colors"
+                        >
+                            {preset.name}
+                        </button>
+                    ))}
+                </div>
+            </details>
+        </div>
+        <div>
+            <label htmlFor="negative-prompt" className="text-sm font-medium text-slate-400 mb-1 block">負面提示詞 (選填)</label>
+            <textarea
+              id="negative-prompt"
+              value={negativePrompt}
+              onChange={(e) => onNegativePromptChange(e.target.value)}
+              placeholder="需要避免的內容... 例如：文字、浮水印、模糊"
+              className="w-full p-2 bg-slate-900 border-2 border-slate-600 rounded-md text-white placeholder-slate-500 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 transition-all resize-none min-h-[60px]"
+              aria-label="圖片生成負面提示詞"
+            />
+        </div>
+        <div className="p-3 bg-slate-900/50 rounded-lg flex items-center justify-between">
+           <label htmlFor="google-search-toggle" className="text-sm text-slate-300 font-medium flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /></svg>
+              啟用 Google 搜尋
+           </label>
+           <button
+              type="button"
+              id="google-search-toggle"
+              onClick={() => onUseGoogleSearchChange(!useGoogleSearch)}
+              className={`${useGoogleSearch ? 'bg-sky-600' : 'bg-slate-600'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-sky-500`}
+              role="switch"
+              aria-checked={useGoogleSearch}
+           >
+              <span className={`${useGoogleSearch ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform`} />
+           </button>
+        </div>
       </div>
+
       {(optimizeError || inspireError) && <p className="w-full max-w-[350px] text-red-400 text-xs mt-2 text-center">{optimizeError || inspireError}</p>}
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         <button
